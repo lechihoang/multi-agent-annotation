@@ -170,23 +170,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - PHÂN TÍCH TỪ NGỮ: Comment sử dụng từ ngữ như thế nào? Có từ ngữ thể hiện cảm xúc hoặc phàn nàn không?",
+                question="Bước 1 - PHÂN TÍCH CẢM XÚC & TỪ NGỮ: Comment thể hiện sự hài lòng (khen) hay không hài lòng (chê)? Có từ ngữ thô tục, chửi bới, xúc phạm (Hateful/Profanity) không?",
             ),
             ARQQuery(
                 id=2,
-                question="Bước 2 - ĐÁNH GIÁ Ý ĐỊNH: Người viết muốn truyền đạt điều gì? Ý định phàn nàn, khen ngợi, hay hỏi thông tin?",
+                question="Bước 2 - ĐÁNH GIÁ TÍNH XÂY DỰNG (CONSTRUCTIVE): Nếu là chê, người viết có đưa ra lý do cụ thể, cảnh báo, hay mong muốn giải quyết (Wish) không? Hay chỉ chửi đổng vô cớ (Non-constructive)?",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - XÁC ĐỊNH ĐỐI TƯỢNG: Nếu có phàn nàn, đối tượng là gì (sản phẩm, giao hàng, dịch vụ...)?",
+                question="Bước 3 - XÁC ĐỊNH ĐỐI TƯỢNG PHÀN NÀN: Có sự phàn nàn cụ thể về sản phẩm/dịch vụ/giao hàng không? (Lưu ý: Chê nhưng không mang tính xây dựng hoặc chửi bới nặng nề được coi là Non-complaint/Toxic).",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - PHÂN TÍCH NGỮ CẢNH: Trong ngữ cảnh comment này, có sự không hài lòng thực sự hay chỉ là hiểu lầm?",
-            ),
-            ARQQuery(
-                id=5,
-                question=f"Bước 5 - QUYẾT ĐỊNH: Dựa trên các phân tích trên, label nào ({', '.join(labels.keys())}) phù hợp nhất?",
+                question=f"Bước 4 - QUYẾT ĐỊNH: Dựa trên định nghĩa (Label 1 = Constructive Complaint, Label 0 = Khen hoặc Chửi bới/Non-constructive), hãy chọn nhãn phù hợp nhất.",
             ),
         ]
 
@@ -197,23 +193,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question=f"Bước 1 - PHÂN TÍCH TITLE: Tiêu đề '{title}' cho biết điều gì về ngữ cảnh?",
+                question=f"Bước 1 - PHÂN TÍCH TITLE: Tiêu đề '{title}' gợi ý đây là một lời khen, góp ý, hay chửi bới?",
             ),
             ARQQuery(
                 id=2,
-                question=f"Bước 2 - PHÂN TÍCH TEXT: Comment '{text}' liên quan đến title như thế nào?",
+                question=f"Bước 2 - PHÂN TÍCH TEXT: Comment '{text}' có nội dung xây dựng (constructive) không? Có chứa lời lẽ xúc phạm (Hateful) không?",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - ĐÁNH GIÁ SỰ PHÙ HỢP: Comment có match với ngữ cảnh của title không?",
+                question="Bước 3 - ĐÁNH GIÁ SỰ PHÙ HỢP: Nếu text tiêu cực, nó có phải là một lời phàn nàn hợp lý (Complaint) hay chỉ là toxic/spam (Non-complaint)?",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - PHÂN LOẠI: Dựa trên cả title và text, label nào phù hợp (0 hay 1)?",
-            ),
-            ARQQuery(
-                id=5,
-                question="Bước 5 - TITLE INFLUENCE: Title có ảnh hưởng như thế nào đến quyết định của bạn?",
+                question="Bước 4 - QUYẾT ĐỊNH: Dựa trên cả title và text, label nào phù hợp (0 hay 1)? Nhớ rằng Hate Speech = Label 0.",
             ),
         ]
 
@@ -223,19 +215,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - PHÂN TÍCH VÍ DỤ: Xem xét các ví dụ tương tự được cung cấp. Chúng có đặc điểm chung gì?",
+                question="Bước 1 - PHÂN TÍCH VÍ DỤ: Các ví dụ tương tự được gán nhãn như thế nào? Chú ý các ví dụ có từ ngữ tiêu cực/chửi bới nhưng gán nhãn 0.",
             ),
             ARQQuery(
                 id=2,
-                question=f"Bước 2 - SO SÁNH: Comment '{text}' giống hay khác các ví dụ trên như thế nào?",
+                question=f"Bước 2 - SO SÁNH TÍNH XÂY DỰNG: Comment '{text}' có mang tính xây dựng (constructive) giống các ví dụ Complaint (1) không? Hay giống các ví dụ Toxic/Non-complaint (0)?",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - PATTERN MATCHING: Có pattern nào từ examples phù hợp với comment không?",
+                question="Bước 3 - PATTERN MATCHING: Có từ khóa chửi thề (profanity) hay xúc phạm nào xuất hiện? (Nếu có -> xu hướng về Label 0).",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - QUYẾT ĐỊNH: Dựa trên similarity với examples, label nào phù hợp (0 hay 1)?",
+                question="Bước 4 - QUYẾT ĐỊNH: Dựa trên similarity, label nào phù hợp? (Label 1 = Complaint có tính xây dựng).",
             ),
         ]
 
@@ -245,19 +237,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - EDGE CASE ANALYSIS: Xem xét các ví dụ edge cases và ambiguous patterns. Phân tích chúng.",
+                question="Bước 1 - EDGE CASE ANALYSIS: Kiểm tra xem đây có phải là Edge Case: 'Chửi bới/Hateful' (Label 0) hoặc 'Khen nhưng thất vọng/Wish' (Label 1) không?",
             ),
             ARQQuery(
                 id=2,
-                question=f"Bước 2 - AMBIGUOUS CHECK: Comment '{text}' có ambiguous không? Có sarcasm, irony, hoặc implicit toxicity không?",
+                question=f"Bước 2 - AMBIGUOUS CHECK: Comment '{text}' có mỉa mai (sarcasm) không? Có chửi thề (Profanity) không? (Chửi thề -> Non-complaint).",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - DECISION: Dựa trên edge cases và ambiguous patterns, label nào phù hợp (0 hay 1)?",
+                question="Bước 3 - DECISION: Phân loại dứt khoát. Complaint (1) phải có ý định góp ý/phàn nàn cụ thể. Toxic/Hateful (0) chỉ là xả giận vô cớ.",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - REASONING: Giải thích chi tiết tại sao bạn chọn label này, đặc biệt với edge cases.",
+                question="Bước 4 - REASONING: Giải thích tại sao chọn label này, đặc biệt nếu comment chứa từ ngữ tiêu cực.",
             ),
         ]
 
