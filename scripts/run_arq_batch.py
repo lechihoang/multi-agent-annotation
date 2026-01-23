@@ -91,13 +91,16 @@ class ARQBatchRunner:
         agent_name = type(agent).__name__
 
         # Get labels from config dynamically
-        labels_config = getattr(self.config.task, "labels", ["0", "1"])
+        labels_config = getattr(self.config.task, "labels", None)
+        if labels_config is None:
+            raise ValueError("Task labels not configured in config.yaml")
+
         if isinstance(labels_config, dict):
             config_labels = list(labels_config.keys())
         elif isinstance(labels_config, list):
             config_labels = labels_config
         else:
-            config_labels = ["0", "1"]
+            raise ValueError(f"Invalid format for task.labels: {type(labels_config)}")
 
         if "PrimaryOnlyAgent" in agent_name:
             # PrimaryOnlyAgent: _build_prompt(text, labels, few_shot)
@@ -127,6 +130,9 @@ class ARQBatchRunner:
 
     async def _tier1_batch(self, texts: List[str]) -> List[str]:
         """Tier 1: Query expansion."""
+        if self.query_expander:
+            return [self.query_expander.expand(t) for t in texts]
+
         prompt = f"Mở rộng query cho {len(texts)} comments:\n"
         for i, t in enumerate(texts):
             prompt += f'{i + 1}. "{t}"\n'
@@ -138,84 +144,53 @@ class ARQBatchRunner:
         )
         content = resp.content.strip()
 
-        try:
-            if content.startswith("```json"):
-                content = content[7:-3]
-            data = json.loads(content)
-            if isinstance(data, list):
-                return [item.get("expanded", texts[i]) for i, item in enumerate(data)]
-        except:
-            pass
-        return texts
+        if content.startswith("```json"):
+            content = content[7:-3]
+
+        data = json.loads(content)
+        if isinstance(data, list):
+            return [item.get("expanded", texts[i]) for i, item in enumerate(data)]
+
+        raise ValueError(
+            f"Invalid Tier 1 response format (not a list): {content[:100]}..."
+        )
 
     async def _run_agent(self, text: str, agent_name: str, agent) -> Dict[str, Any]:
         """Chạy một agent và capture đầy đủ output."""
         start_time = time.time()
 
         # Build prompt based on agent type
-        try:
-            prompt = self._build_prompt_for_agent(agent, text)
-        except Exception as e:
-            return {
-                "agent": agent_name,
-                "text": text,
-                "label": "unknown",
-                "confidence": 0.5,
-                "confidence_level": "MEDIUM",
-                "reasoning": f"Cannot build prompt: {str(e)}",
-                "elapsed_seconds": round(time.time() - start_time, 2),
-                "error": str(e),
-            }
+        prompt = self._build_prompt_for_agent(agent, text)
 
         # Call LLM
         await self._rate_limit()
-        try:
-            # Check which client to use (some agents might still use _groq if not updated, but we updated retrieval agents)
-            # The agents expose either _groq or _llm_client (or inherited via base if any)
-            # But let's check what attribute they have.
-            # Ideally we should fix all agents to use a standard _llm_client or chat() method.
-            # But here we are calling agent._groq.chat(...) directly which is risky if we changed it to _llm_client.
 
-            # Let's inspect the agent to see what client it has.
-            client = getattr(agent, "_llm_client", getattr(agent, "_groq", None))
+        client = getattr(agent, "_llm_client", getattr(agent, "_groq", None))
 
-            if client is None:
-                raise ValueError(f"Agent {agent_name} has no initialized LLM client")
+        if client is None:
+            raise ValueError(f"Agent {agent_name} has no initialized LLM client")
 
-            response = await client.chat([{"role": "user", "content": prompt}])
-            raw_response = response.content
+        response = await client.chat([{"role": "user", "content": prompt}])
+        raw_response = response.content
 
-            # Parse ARQ response
-            parsed = agent._parse_response(raw_response)
+        # Parse ARQ response
+        parsed = agent._parse_response(raw_response)
 
-            elapsed = time.time() - start_time
+        elapsed = time.time() - start_time
 
-            result = {
-                "agent": agent_name,
-                "text": text,
-                "label": parsed.get("topic", "unknown"),
-                "confidence": parsed.get("confidence", 0.5),
-                "confidence_level": parsed.get("confidence_level", "MEDIUM"),
-                "reasoning": parsed.get("reasoning", "")[:500],
-                "elapsed_seconds": round(elapsed, 2),
-                "raw_response": raw_response[:1000],
-                "prompt_used": prompt[:500],
-            }
+        result = {
+            "agent": agent_name,
+            "text": text,
+            "label": parsed.get("topic", "unknown"),
+            "confidence": parsed.get("confidence", 0.5),
+            "confidence_level": parsed.get("confidence_level", "MEDIUM"),
+            "reasoning": parsed.get("reasoning", "")[:500],
+            "elapsed_seconds": round(elapsed, 2),
+            "raw_response": raw_response[:1000],
+            "prompt_used": prompt[:500],
+        }
 
-            return result
-
-        except Exception as e:
-            elapsed = time.time() - start_time
-            return {
-                "agent": agent_name,
-                "text": text,
-                "label": "unknown",
-                "confidence": 0.5,
-                "confidence_level": "MEDIUM",
-                "reasoning": f"Error: {str(e)}",
-                "elapsed_seconds": round(elapsed, 2),
-                "error": str(e),
-            }
+        return result
 
     async def process_batch(self, texts: List[str], batch_num: int = 1) -> List[Dict]:
         n = len(texts)
@@ -352,6 +327,7 @@ async def run(
     batch_size: int = 5,
     max_samples: int = 5,
     calls_per_minute: int = 40,
+    batch_delay: int = 60,
 ):
     runner = ARQBatchRunner(calls_per_minute)
 
@@ -382,7 +358,11 @@ async def run(
         cols = reader.fieldnames or []
 
         # STRICT MODE: Use column from config ONLY
-        config_col = getattr(runner.config.task.columns, "text", "review")
+        config_col = getattr(runner.config.task.columns, "text", None)
+        if config_col is None:
+            raise ValueError(
+                "Text column not configured in config.yaml (task.columns.text)"
+            )
 
         if config_col not in cols:
             logger.error(
@@ -391,7 +371,7 @@ async def run(
             logger.error(
                 "Please update config.yaml (task.columns.text) or check your input file."
             )
-            return
+            raise ValueError(f"Column '{config_col}' missing in input file")
 
         text_col = config_col
 
@@ -467,6 +447,12 @@ async def run(
         except Exception as e:
             logger.error(f"Error saving raw logs: {e}")
 
+        if batch_delay > 0:
+            logger.info(
+                f"Waiting {batch_delay}s before next batch to avoid 429 errors..."
+            )
+            await asyncio.sleep(batch_delay)
+
     # Summary
     print(f"\n{'=' * 60}")
     print("SUMMARY")
@@ -521,8 +507,23 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", "-b", type=int, default=5)
     parser.add_argument("--max", "-m", type=int, default=5)
     parser.add_argument("--rate", "-r", type=int, default=40)
+    parser.add_argument(
+        "--batch-delay",
+        "-d",
+        type=int,
+        default=60,
+        help="Delay in seconds between batches to avoid rate limits",
+    )
     args = parser.parse_args()
 
     asyncio.run(
-        run(args.input, args.output, args.raw, args.batch_size, args.max, args.rate)
+        run(
+            args.input,
+            args.output,
+            args.raw,
+            args.batch_size,
+            args.max,
+            args.rate,
+            args.batch_delay,
+        )
     )

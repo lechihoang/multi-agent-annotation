@@ -146,39 +146,35 @@ class QueryExpander:
         ):
             return []
 
-        try:
-            import numpy as np
+        import numpy as np
 
-            # Encode query
-            query_embedding = QueryExpander._embedding_model.encode(
-                [query], normalize_embeddings=True
-            )
+        # Encode query
+        query_embedding = QueryExpander._embedding_model.encode(
+            [query], normalize_embeddings=True
+        )
 
-            # Compute similarity with all vocabulary terms
-            similarities = np.dot(
-                QueryExpander._vocabulary_embeddings, query_embedding.T
-            ).flatten()
+        # Compute similarity with all vocabulary terms
+        similarities = np.dot(
+            QueryExpander._vocabulary_embeddings, query_embedding.T
+        ).flatten()
 
-            # Get top-k most similar terms (excluding terms already in query)
-            query_words = set(query.lower().split())
-            similar_terms = []
+        # Get top-k most similar terms (excluding terms already in query)
+        query_words = set(query.lower().split())
+        similar_terms = []
 
-            for idx in np.argsort(similarities)[::-1]:
-                term = QueryExpander._vocabulary_terms[idx]
-                # Skip if term is already in query
-                if term in query_words:
-                    continue
-                # Skip if similarity is too low
-                if similarities[idx] < 0.3:
-                    break
-                similar_terms.append(term)
-                if len(similar_terms) >= top_k:
-                    break
+        for idx in np.argsort(similarities)[::-1]:
+            term = QueryExpander._vocabulary_terms[idx]
+            # Skip if term is already in query
+            if term in query_words:
+                continue
+            # Skip if similarity is too low
+            if similarities[idx] < 0.3:
+                break
+            similar_terms.append(term)
+            if len(similar_terms) >= top_k:
+                break
 
-            return similar_terms
-
-        except Exception:
-            return []
+        return similar_terms
 
     def expand(self, query: str, top_k: int = 5) -> str:
         """Expand query with semantically similar terms.

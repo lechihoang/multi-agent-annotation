@@ -106,70 +106,21 @@ class PrimaryOnlyAgent:
             labels: Classification labels
             few_shot_examples: Optional few-shot examples from FewShotSelector
         """
-        # If labels not provided or empty, use dynamic inference
         if labels is None or len(labels) == 0:
-            return await self._annotate_dynamic(text)
+            raise ValueError("Labels must be provided for PrimaryOnlyAgent")
 
         prompt = self._build_prompt(text, labels, few_shot_examples)
 
-        try:
-            if self._llm_client is not None:
-                messages = [{"role": "user", "content": prompt}]
-                response = await self._llm_client.chat(messages)
-                content = response.content
-                print(f"  [DEBUG] Raw response: {content[:200]}...")
-            else:
-                print("  [DEBUG] LLM client is None!")
-                raise RuntimeError("LLM client not available")
+        if self._llm_client is None:
+            raise RuntimeError("LLM client not available")
 
-            result = self._parse_response(content)
-            print(f"  [DEBUG] Parsed result: {result}")
+        messages = [{"role": "user", "content": prompt}]
+        response = await self._llm_client.chat(messages)
+        content = response.content
+        print(f"  [DEBUG] Raw response: {content[:200]}...")
 
-        except Exception as e:
-            print(f"  [DEBUG] Exception: {e}")
-            result = {
-                "topic": "unknown",
-                "confidence": 0.5,
-                "reasoning": f"Error: {str(e)}",
-            }
-
-        return PrimaryOnlyAnnotation(
-            label=result.get("topic", "unknown"),
-            confidence=result.get("confidence", 0.5),
-            confidence_level=result.get("confidence_level", "MEDIUM"),
-            reasoning=result.get("reasoning", ""),
-        )
-
-    async def _annotate_dynamic(self, text: str) -> PrimaryOnlyAnnotation:
-        """Annotate text without predefined labels - dynamic inference."""
-        prompt = """You are a topic classification expert. Analyze the text and determine:
-1. What is the main topic/category of this text?
-2. Provide a confidence score
-
-TEXT: {text}
-
-Respond ONLY with valid JSON:
-{{"topic": "...", "confidence": 0.0-1.0, "reasoning": "..."}}"""
-
-        try:
-            if self._llm_client is not None:
-                messages = [{"role": "user", "content": prompt.format(text=text)}]
-                response = await self._llm_client.chat(messages)
-                result = self._parse_response(response.content)
-            else:
-                result = {
-                    "topic": "unknown",
-                    "confidence": 0.5,
-                    "confidence_level": "MEDIUM",
-                    "reasoning": "LLM client not available",
-                }
-        except Exception as e:
-            result = {
-                "topic": "unknown",
-                "confidence": 0.5,
-                "confidence_level": "MEDIUM",
-                "reasoning": f"Error: {str(e)}",
-            }
+        result = self._parse_response(content)
+        print(f"  [DEBUG] Parsed result: {result}")
 
         return PrimaryOnlyAnnotation(
             label=result.get("topic", "unknown"),

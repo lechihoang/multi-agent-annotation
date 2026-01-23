@@ -174,6 +174,11 @@ class RetrievalMrlAgent:
                             # For MRL/Edge cases: In a real scenario, we might filter specific tricky examples here.
                             # For now, we use the full seed pool and rely on vector search to find relevant cases.
                             return examples
+                        else:
+                            raise ValueError(
+                                f"Could not identify text/label columns in {path}. "
+                                f"Ensure columns match config or standard names."
+                            )
             except Exception as e:
                 print(f"Error: Failed to load seed examples: {e}")
                 raise
@@ -258,41 +263,24 @@ class RetrievalMrlAgent:
     ) -> RetrievalMRLAnnotation:
         """Annotate text using MAFA pattern: retrieval + LLM classification."""
         if labels is None or len(labels) == 0:
-            labels = ["0", "1"]
+            raise ValueError("Labels must be provided for RetrievalMrlAgent")
 
         self._ensure_loaded()
 
         if RetrievalMrlAgent._faiss_index is None or self._llm_client is None:
-            return RetrievalMRLAnnotation(
-                label="unknown",
-                confidence=0.5,
-                nearest_examples=[],
+            raise RuntimeError(
+                "RetrievalMrlAgent not fully initialized (FAISS or LLM missing)"
             )
 
         nearest = self._retrieve(text, k=3)  # Reduced to 3 for lower token usage
 
         if not nearest:
-            return RetrievalMRLAnnotation(
-                label="unknown",
-                confidence=0.3,
-                nearest_examples=[],
-            )
+            raise ValueError("No similar examples found for retrieval")
 
         prompt = self._build_mafa_prompt(text, nearest, labels)
 
-        try:
-            response = await self._llm_client.chat(
-                [{"role": "user", "content": prompt}]
-            )
-            result = self._parse_response(response.content)
-        except Exception as e:
-            result = {
-                "topic": "unknown",
-                "confidence": 0.5,
-                "confidence_level": "LOW",
-                "reasoning": f"Error: {str(e)}",
-                "intent_analysis": "",
-            }
+        response = await self._llm_client.chat([{"role": "user", "content": prompt}])
+        result = self._parse_response(response.content)
 
         # Confidence is already numeric from ARQ parsing
         numeric_conf = result.get("confidence", 0.5)

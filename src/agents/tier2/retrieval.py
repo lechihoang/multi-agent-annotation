@@ -163,8 +163,9 @@ class RetrievalAgent:
                                     )
                             return examples
                         else:
-                            print(
-                                f"Warning: Could not identify text/label columns in {path}. Using defaults."
+                            raise ValueError(
+                                f"Could not identify text/label columns in {path}. "
+                                f"Ensure columns match config or standard names."
                             )
             except Exception as e:
                 print(f"Error: Failed to load seed examples from {seed_path}: {e}")
@@ -256,45 +257,28 @@ class RetrievalAgent:
     ) -> RetrievalAnnotation:
         """Annotate text using MAFA pattern: retrieval + LLM classification."""
         if labels is None or len(labels) == 0:
-            labels = ["0", "1"]
+            raise ValueError("Labels must be provided for RetrievalAgent")
 
         # 1. Lazy load model
         self._ensure_loaded()
 
         if RetrievalAgent._faiss_index is None or self._llm_client is None:
-            return RetrievalAnnotation(
-                label="unknown",
-                confidence=0.5,
-                nearest_examples=[],
+            raise RuntimeError(
+                "RetrievalAgent not fully initialized (FAISS or LLM missing)"
             )
 
         # 2. Retrieve similar examples
         nearest = self._retrieve(text, k=3)  # Reduced to 3 for lower token usage
 
         if not nearest:
-            return RetrievalAnnotation(
-                label="unknown",
-                confidence=0.3,
-                nearest_examples=[],
-            )
+            raise ValueError("No similar examples found for retrieval")
 
         # 3. Build MAFA-style prompt
         prompt = self._build_mafa_prompt(text, nearest, labels)
 
         # 4. LLM makes classification decision
-        try:
-            response = await self._llm_client.chat(
-                [{"role": "user", "content": prompt}]
-            )
-            result = self._parse_response(response.content)
-        except Exception as e:
-            result = {
-                "topic": "unknown",
-                "confidence": 0.5,
-                "confidence_level": "LOW",
-                "reasoning": f"Error: {str(e)}",
-                "intent_analysis": "",
-            }
+        response = await self._llm_client.chat([{"role": "user", "content": prompt}])
+        result = self._parse_response(response.content)
 
         # 5. Confidence is already numeric from ARQ parsing
         numeric_conf = result.get("confidence", 0.5)

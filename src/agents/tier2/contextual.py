@@ -104,76 +104,22 @@ class ContextualAgent:
             labels: Classification labels
             few_shot_examples: Optional few-shot examples from FewShotSelector
         """
-        # If labels not provided or empty, use dynamic inference
         if labels is None or len(labels) == 0:
-            return await self._annotate_dynamic(text, title)
+            raise ValueError("Labels must be provided for ContextualAgent")
 
         if not title:
             title = "[No title provided]"
 
         prompt = self._build_prompt(text, title, labels, few_shot_examples)
 
-        try:
-            if self._llm_client is not None:
-                messages = [{"role": "user", "content": prompt}]
-                response = await self._llm_client.chat(messages)
-                content = response.content
-            else:
-                raise RuntimeError("LLM client not available")
+        if self._llm_client is None:
+            raise RuntimeError("LLM client not available")
 
-            result = self._parse_response(content)
+        messages = [{"role": "user", "content": prompt}]
+        response = await self._llm_client.chat(messages)
+        content = response.content
 
-        except Exception as e:
-            result = {
-                "topic": "unknown",
-                "confidence": 0.5,
-                "reasoning": f"Error: {str(e)}",
-                "title_influence": "",
-            }
-
-        return ContextualAnnotation(
-            label=result.get("topic", "unknown"),
-            confidence=result.get("confidence", 0.5),
-            reasoning=result.get("reasoning", ""),
-            context_used=result.get("title_influence", ""),
-        )
-
-    async def _annotate_dynamic(
-        self, text: str, title: str = ""
-    ) -> ContextualAnnotation:
-        """Annotate text without predefined labels - dynamic inference."""
-        context = f"Title: {title}\n" if title else ""
-        prompt = f"""You are a topic classification expert. Analyze the text with context and determine:
-1. What is the main topic/category?
-2. How does the context influence your decision?
-
-{context}
-TEXT: {text}
-
-Respond ONLY with valid JSON:
-{{"topic": "...", "confidence": 0.0-1.0, "reasoning": "...", "title_influence": "..."}}"""
-
-        try:
-            if self._llm_client is not None:
-                messages = [{"role": "user", "content": prompt}]
-                response = await self._llm_client.chat(messages)
-                result = self._parse_response(response.content)
-            else:
-                result = {
-                    "topic": "unknown",
-                    "confidence": 0.5,
-                    "confidence_level": "MEDIUM",
-                    "reasoning": "LLM client not available",
-                    "title_influence": "",
-                }
-        except Exception as e:
-            result = {
-                "topic": "unknown",
-                "confidence": 0.5,
-                "confidence_level": "MEDIUM",
-                "reasoning": f"Error: {str(e)}",
-                "title_influence": "",
-            }
+        result = self._parse_response(content)
 
         return ContextualAnnotation(
             label=result.get("topic", "unknown"),

@@ -97,6 +97,7 @@ class NimClient:
     async def chat(self, messages: List[Dict[str, str]]) -> ChatResponse:
         """Send chat completion request to NIM API."""
         import httpx
+        import asyncio
 
         # Prepare headers
         headers = {
@@ -111,14 +112,46 @@ class NimClient:
             "max_tokens": self.max_tokens,
         }
 
+        max_retries = 3
+        retry_delay = 5  # Initial retry delay (seconds)
+
         async with httpx.AsyncClient(timeout=120.0) as http_client:
-            response = await http_client.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+            data = None
+            response = None
+            for attempt in range(max_retries):
+                response = await http_client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+
+                if response.status_code == 429:
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after:
+                        wait_time = int(retry_after)
+                    else:
+                        wait_time = retry_delay * (2**attempt)  # Exponential backoff
+
+                    print(
+                        f"  [429] Rate limited. Waiting {wait_time}s before retry ({attempt + 1}/{max_retries})..."
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+
+                response.raise_for_status()
+                data = response.json()
+
+                # Success - break retry loop
+                break
+            else:
+                # If loop finishes without success
+                if response:
+                    response.raise_for_status()
+                else:
+                    raise RuntimeError("Failed to get response from NIM API")
+
+        if data is None:
+            raise RuntimeError("No data received from NIM API")
 
         choice = data["choices"][0]
         message = choice["message"]
