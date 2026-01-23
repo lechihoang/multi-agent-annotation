@@ -112,43 +112,61 @@ class NimClient:
             "max_tokens": self.max_tokens,
         }
 
-        max_retries = 3
-        retry_delay = 5  # Initial retry delay (seconds)
+        max_retries = 10  # Increased for batch processing stability
+        retry_delay = 30  # Increased base delay
 
         async with httpx.AsyncClient(timeout=120.0) as http_client:
             data = None
             response = None
             for attempt in range(max_retries):
-                response = await http_client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-
-                if response.status_code == 429:
-                    retry_after = response.headers.get("Retry-After")
-                    if retry_after:
-                        wait_time = int(retry_after)
-                    else:
-                        wait_time = retry_delay * (2**attempt)  # Exponential backoff
-
-                    print(
-                        f"  [429] Rate limited. Waiting {wait_time}s before retry ({attempt + 1}/{max_retries})..."
+                try:
+                    response = await http_client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=headers,
+                        json=payload,
                     )
-                    await asyncio.sleep(wait_time)
+
+                    if response.status_code == 429:
+                        retry_after = response.headers.get("Retry-After")
+                        if retry_after:
+                            wait_time = int(retry_after) + 5  # Add 5s buffer
+                        else:
+                            # Exponential backoff with higher base: 30, 60, 120, ...
+                            wait_time = retry_delay * (2**attempt)
+                            # Cap wait time at 5 minutes
+                            wait_time = min(wait_time, 300)
+
+                        print(
+                            f"  [429] Rate limited. Waiting {wait_time}s before retry ({attempt + 1}/{max_retries})..."
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                    response.raise_for_status()
+                    data = response.json()
+
+                    # Success - break retry loop
+                    break
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        # Should have been handled above, but just in case
+                        print(f"  [429] HTTPStatusError caught. Retrying...")
+                        await asyncio.sleep(30)
+                        continue
+                    raise e
+                except (httpx.ConnectError, httpx.ReadTimeout) as e:
+                    print(f"  [Network] {e}. Retrying in 10s...")
+                    await asyncio.sleep(10)
                     continue
 
-                response.raise_for_status()
-                data = response.json()
-
-                # Success - break retry loop
-                break
             else:
                 # If loop finishes without success
                 if response:
                     response.raise_for_status()
                 else:
-                    raise RuntimeError("Failed to get response from NIM API")
+                    raise RuntimeError(
+                        "Failed to get response from NIM API after multiple retries"
+                    )
 
         if data is None:
             raise RuntimeError("No data received from NIM API")

@@ -332,23 +332,38 @@ async def run(
     runner = ARQBatchRunner(calls_per_minute)
 
     # Output file path
-    output_path = Path(output_file).with_suffix(".csv")
+    output_path = Path(output_file)
 
     # Check existing progress to resume
     existing_count = 0
     if output_path.exists():
         try:
             with open(output_path, "r", encoding="utf-8-sig") as f:
-                # Subtract 1 for header
-                existing_count = sum(1 for line in f) - 1
+                reader = csv.reader(f)
+                rows = list(reader)
+                existing_count = len(rows) - 1
+
                 if existing_count < 0:
                     existing_count = 0
+
             if existing_count > 0:
-                logger.info(f"Found existing output with {existing_count} samples.")
+                logger.info(f"Found existing output at {output_path.absolute()}")
+                logger.info(
+                    f"Total rows in file: {len(rows)} (Header + {existing_count} samples)"
+                )
                 logger.info(f"Resuming from sample {existing_count + 1}...")
+            else:
+                logger.info(
+                    f"Output file exists but is empty (only header). Starting from beginning."
+                )
+
         except Exception as e:
             logger.error(f"Error checking existing file: {e}")
             existing_count = 0
+    else:
+        logger.info(
+            f"No existing output file found at {output_path.absolute()}. Starting new."
+        )
 
     # Load texts
     texts = []
@@ -384,6 +399,7 @@ async def run(
             t = row.get(text_col, "").strip()
             if t:
                 texts.append(t)
+
             if max_samples > 0 and len(texts) >= max_samples:
                 break
 

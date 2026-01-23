@@ -183,7 +183,7 @@ os.environ["NIM_API_KEY"] = UserSecretsClient().get_secret("NIM_API_KEY")
 # OR if using repo data, just skip this step
 
 # 4. Run Annotation (Rate limit 30 for safety, max 0 for all data, 2 min delay between batches)
-!python scripts/run_arq_batch.py --input data/unlabeled.csv --rate 30 --max 0 --batch-delay 120
+!python3 scripts/run_arq_batch.py --input data/unlabeled.csv --rate 30 --max 0 --batch-delay 60
 
 # 5. Download Results
 # The output file 'data/batch_arq_results.csv' will appear in the Output tab
