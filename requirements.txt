@@ -9,3 +9,7 @@ faiss-cpu>=1.7.0
 python-dotenv>=1.0.0
 numpy>=1.24.0
 pandas>=2.0.0
+loguru>=0.7.0
+
+# LLM Clients
+openai>=1.0.0
