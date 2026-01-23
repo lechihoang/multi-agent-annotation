@@ -135,7 +135,8 @@ Start the batch annotation process. The system allows stopping and resuming at a
 
 ```bash
 # Run with rate limit (e.g., 30 calls/minute for Production)
-./venv/bin/python scripts/run_arq_batch.py --input data/unlabeled.csv --rate 30
+# Use --max 0 to process ALL data (default is 5 samples for testing)
+./venv/bin/python scripts/run_arq_batch.py --input data/unlabeled.csv --rate 30 --max 0
 ```
 
 **Features:**
@@ -180,8 +181,8 @@ os.environ["NIM_API_KEY"] = UserSecretsClient().get_secret("NIM_API_KEY")
 !cp /kaggle/input/my-annotation-data/unlabeled.csv data/
 # OR if using repo data, just skip this step
 
-# 4. Run Annotation (Rate limit 30 for safety)
-!python scripts/run_arq_batch.py --input data/unlabeled.csv --rate 30
+# 4. Run Annotation (Rate limit 30 for safety, max 0 for all data)
+!python scripts/run_arq_batch.py --input data/unlabeled.csv --rate 30 --max 0
 
 # 5. Download Results
 # The output file 'data/batch_arq_results.csv' will appear in the Output tab
