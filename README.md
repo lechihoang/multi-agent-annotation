@@ -164,7 +164,7 @@ To run this system on Kaggle (ideal for long-running batches):
 
 ```python
 # 1. Setup Environment
-!git clone https://github.com/your-username/multi-agent-annotation.git
+!git clone https://github.com/lechihoang/multi-agent-annotation.git
 %cd multi-agent-annotation
 !pip install -q -r requirements.txt
 
