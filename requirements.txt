@@ -1,0 +1,11 @@
+# Groq API client (free GPU inference)
+groq>=0.1.0
+
+# Embeddings + Vector Search (local - retrieval agent)
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.0
+
+# Utilities
+python-dotenv>=1.0.0
+numpy>=1.24.0
+pandas>=2.0.0

@@ -58,11 +58,11 @@ config.local.yaml
 *.local.yaml
 
 # Data files (if not meant to be committed)
-data/*.csv
-data/*.json
-data/*.parquet
-data/*.db
-data/*.sqlite
+# data/*.csv
+# data/*.json
+# data/*.parquet
+# data/*.db
+# data/*.sqlite
 
 # OS files
 .DS_Store
@@ -80,9 +80,4 @@ htmlcov/
 dmypy.json
 
 # Project specific (untracked)
-src/
-scripts/
-*.md
-!README.md
-config.yaml
-requirements.txt
+
