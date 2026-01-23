@@ -221,7 +221,20 @@ class ARQBatchRunner:
         }
 
         for i, text in enumerate(texts):
+            task_id = f"b{batch_num}_{i}"
             logger.debug(f'    Sample {i + 1}/{n}: "{text[:50]}..."')
+
+            # Log Tier 1 info to raw responses
+            self.raw_responses.append(
+                {
+                    "task_id": task_id,
+                    "tier": 1,
+                    "agent": "query_expander",
+                    "input": text,
+                    "output": expanded[i],
+                    "method": "embedding" if self.query_expander else "llm_fallback",
+                }
+            )
 
             # Run all 4 agents in parallel for this text
             tasks = [
@@ -241,10 +254,11 @@ class ARQBatchRunner:
                     }
                 )
 
-                # Store raw response for debugging
+                # Store raw response for debugging (Tier 2)
                 self.raw_responses.append(
                     {
-                        "task_id": f"b{batch_num}_{i}",
+                        "task_id": task_id,
+                        "tier": 2,
                         "agent": r["agent"],
                         "prompt": r.get("prompt_used", "")[:500],
                         "raw_response": r.get("raw_response", ""),
@@ -306,6 +320,17 @@ class ARQBatchRunner:
                 "agent_agreement": dict(label_counts),
             }
 
+            # Log Tier 3 info to raw responses
+            self.raw_responses.append(
+                {
+                    "task_id": r["task_id"],
+                    "tier": 3,
+                    "agent": "judge",
+                    "input": {"avg_confidence": avg_conf, "votes": dict(label_counts)},
+                    "output": {"final_label": final_label, "decision": decision},
+                }
+            )
+
             # Tier 4: Review queue
             try:
                 self.review_queue.add(
@@ -323,7 +348,7 @@ class ARQBatchRunner:
 async def run(
     input_file: str = str(DATA_DIR / "train.csv"),
     output_file: str = str(DATA_DIR / "batch_arq_results.csv"),
-    raw_output_file: str = str(DATA_DIR / "batch_arq_raw.json"),
+    raw_output_file: str = str(DATA_DIR / "debug_trace.json"),
     batch_size: int = 5,
     max_samples: int = 5,
     calls_per_minute: int = 40,
@@ -446,22 +471,12 @@ async def run(
         except Exception as e:
             logger.error(f"Error saving CSV: {e}")
 
-        # Save FULL details to JSON (Rewrite full list for valid JSON structure)
-        detailed_file = str(Path(output_file).parent / "batch_arq_full_details.json")
-        try:
-            with open(detailed_file, "w", encoding="utf-8") as f:
-                json.dump(all_results, f, ensure_ascii=False, indent=2)
-            logger.debug(f"Saved full detailed results to {detailed_file}")
-        except Exception as e:
-            logger.error(f"Error saving JSON details: {e}")
-
-        # Save raw responses (LLM raw output)
         try:
             with open(raw_output_file, "w", encoding="utf-8") as f:
                 json.dump(runner.raw_responses, f, ensure_ascii=False, indent=2)
-            logger.debug(f"Saved raw LLM responses to {raw_output_file}")
+            logger.debug(f"Saved debug trace to {raw_output_file}")
         except Exception as e:
-            logger.error(f"Error saving raw logs: {e}")
+            logger.error(f"Error saving debug trace: {e}")
 
         if batch_delay > 0:
             logger.info(
@@ -490,10 +505,7 @@ async def run(
 
     csv_out = str(Path(output_file).with_suffix(".csv"))
     print(f"\nSaved (CSV): {csv_out}")
-    print(
-        f"Saved (Detailed): {str(Path(output_file).parent / 'batch_arq_full_details.json')}"
-    )
-    print(f"Raw LLM Logs: {raw_output_file}")
+    print(f"Saved (Debug Trace): {raw_output_file}")
 
     # Time statistics
     total_duration = time.time() - total_start_time
@@ -519,7 +531,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output", "-o", default="data/batch_arq_results.csv"
     )  # Default to CSV
-    parser.add_argument("--raw", "-R", default="data/batch_arq_raw.json")
+    parser.add_argument("--raw", "-R", default="data/debug_trace.json")
     parser.add_argument("--batch-size", "-b", type=int, default=5)
     parser.add_argument("--max", "-m", type=int, default=5)
     parser.add_argument("--rate", "-r", type=int, default=40)

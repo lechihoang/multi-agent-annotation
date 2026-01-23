@@ -52,8 +52,8 @@ task:
   description: "Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt."
   
   labels:
-    "0": "Non-complaint - Bình luận tích cực, khen ngợi, hỏi đáp, hoặc trung tính. Không thể hiện sự bất mãn."
-    "1": "Complaint - Phàn nàn về sản phẩm, dịch vụ, giao hàng, đóng gói. Thể hiện sự không hài lòng."
+    "0": "Non-complaint (Label 0) - Bình luận khen ngợi, hài lòng về sản phẩm/dịch vụ, hoặc nhận xét tích cực/trung tính."
+    "1": "Complaint (Label 1) - Bình luận phàn nàn, thể hiện sự không hài lòng, thất vọng, cảnh báo hoặc góp ý."
   
   columns:
     text: "review"

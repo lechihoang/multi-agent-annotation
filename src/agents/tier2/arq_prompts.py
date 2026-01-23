@@ -43,38 +43,46 @@ class ARQPromptBuilder:
     NO FALLBACK - LLM must output valid JSON matching output_schema.
     """
 
-    # Load labels from config dynamically
-    _CONFIG = get_config()
-    LABELS = (
-        _CONFIG.task.labels
-        if hasattr(_CONFIG, "task")
-        and hasattr(_CONFIG.task, "labels")
-        and isinstance(_CONFIG.task.labels, dict)
-        else {
+    @staticmethod
+    def _get_labels() -> Dict[str, str]:
+        """Get labels dynamically from config."""
+        config = get_config()
+        if (
+            hasattr(config, "task")
+            and hasattr(config.task, "labels")
+            and isinstance(config.task.labels, dict)
+        ):
+            return config.task.labels
+
+        # Default fallback if config missing (should not happen in prod)
+        return {
             "0": "Non-complaint - Bình luận tích cực, khen ngợi, hỏi đáp, hoặc trung tính.",
             "1": "Complaint - Phàn nàn về sản phẩm, dịch vụ, giao hàng, đóng gói.",
         }
-    )
 
-    OUTPUT_SCHEMA = {
-        "type": "object",
-        "properties": {
-            "final_label": {
-                "type": "string",
-                "enum": list(LABELS.keys()),
-                "description": f"Chọn một trong các nhãn: {', '.join(LABELS.keys())}",
+    @staticmethod
+    def _get_output_schema() -> Dict[str, Any]:
+        """Get output schema dynamically based on current labels."""
+        labels = ARQPromptBuilder._get_labels()
+        return {
+            "type": "object",
+            "properties": {
+                "final_label": {
+                    "type": "string",
+                    "enum": list(labels.keys()),
+                    "description": f"Chọn một trong các nhãn: {', '.join(labels.keys())}",
+                },
+                "confidence": {
+                    "type": "string",
+                    "description": "Độ tin tưởng từ 0.0 đến 1.0 (ví dụ: 0.95, 0.87). Trả về dưới dạng string.",
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "Giải thích chi tiết quyết định, dựa trên phân tích các bước trước",
+                },
             },
-            "confidence": {
-                "type": "string",
-                "description": "Độ tin tưởng từ 0.0 đến 1.0 (ví dụ: 0.95, 0.87). Trả về dưới dạng string.",
-            },
-            "reasoning": {
-                "type": "string",
-                "description": "Giải thích chi tiết quyết định, dựa trên phân tích các bước trước",
-            },
-        },
-        "required": ["final_label", "confidence", "reasoning"],
-    }
+            "required": ["final_label", "confidence", "reasoning"],
+        }
 
     @staticmethod
     def build_toxicity_arq(
@@ -83,17 +91,10 @@ class ARQPromptBuilder:
         context: Optional[str] = None,
         agent_type: str = "primary",
     ) -> ARQPrompt:
-        """Build ARQ prompt for classification task.
-
-        Args:
-            text: Text to classify
-            examples: Few-shot examples (optional)
-            context: Optional context/title
-            agent_type: primary | contextual | retrieval | hybrid
-        """
+        """Build ARQ prompt for classification task."""
         system_prompt = ARQPromptBuilder._build_system_prompt(text, context)
         reasoning_queries = ARQPromptBuilder._build_queries(agent_type, text, context)
-        output_schema = ARQPromptBuilder.OUTPUT_SCHEMA
+        output_schema = ARQPromptBuilder._get_output_schema()
         examples = examples or []
 
         return ARQPrompt(
@@ -120,7 +121,8 @@ class ARQPromptBuilder:
         ]
 
         # Dynamic labels
-        for label, desc in ARQPromptBuilder.LABELS.items():
+        labels = ARQPromptBuilder._get_labels()
+        for label, desc in labels.items():
             parts.append(f"  - {label}: {desc}")
 
         parts.extend(
@@ -164,6 +166,7 @@ class ARQPromptBuilder:
     @staticmethod
     def _primary_queries(text: str) -> List[ARQQuery]:
         """Primary agent: direct analysis."""
+        labels = ARQPromptBuilder._get_labels()
         return [
             ARQQuery(
                 id=1,
@@ -183,7 +186,7 @@ class ARQPromptBuilder:
             ),
             ARQQuery(
                 id=5,
-                question=f"Bước 5 - QUYẾT ĐỊNH: Dựa trên các phân tích trên, label nào ({', '.join(ARQPromptBuilder.LABELS.keys())}) phù hợp nhất?",
+                question=f"Bước 5 - QUYẾT ĐỊNH: Dựa trên các phân tích trên, label nào ({', '.join(labels.keys())}) phù hợp nhất?",
             ),
         ]
 
@@ -335,7 +338,7 @@ class ARQPromptBuilder:
             raise ValueError(f"Missing 'reasoning' in response: {data}")
 
         # Validate label (Dynamic check)
-        valid_labels = list(ARQPromptBuilder.LABELS.keys())
+        valid_labels = list(ARQPromptBuilder._get_labels().keys())
         if data["final_label"] not in valid_labels:
             raise ValueError(
                 f"Invalid label: {data['final_label']}. Expected one of {valid_labels}"
