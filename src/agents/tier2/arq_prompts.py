@@ -188,24 +188,28 @@ class ARQPromptBuilder:
 
     @staticmethod
     def _contextual_queries(text: str, context: Optional[str]) -> List[ARQQuery]:
-        """Contextual agent: analysis with title/context."""
-        title = context or "Không có"
+        """Critic agent (formerly Contextual): Devil's Advocate analysis based on Olshtain & Weinbach.
+
+        Focuses on verifying strictly against the definition constraints:
+        - Complaint (1) MUST be constructive and show dissatisfaction/unmet expectation.
+        - Non-complaint (0) includes compliments AND non-constructive hate speech/insults.
+        """
         return [
             ARQQuery(
                 id=1,
-                question=f"Bước 1 - PHÂN TÍCH TITLE: Tiêu đề '{title}' gợi ý đây là một lời khen, góp ý, hay chửi bới?",
+                question="Bước 1 - CRITIC CHECK (HATE SPEECH): Tìm kỹ các từ ngữ thô tục, xúc phạm, chửi thề (L**, c**, ngu, lừa đảo...). Theo định nghĩa, nếu chỉ có chửi bới mà KHÔNG mang tính xây dựng -> Phải là Label 0 (Non-complaint). Câu này có vi phạm không?",
             ),
             ARQQuery(
                 id=2,
-                question=f"Bước 2 - PHÂN TÍCH TEXT: Comment '{text}' có nội dung xây dựng (constructive) không? Có chứa lời lẽ xúc phạm (Hateful) không?",
+                question="Bước 2 - CRITIC CHECK (UNMET EXPECTATIONS): Tìm các cấu trúc 'Tuy nhiên', 'Giá mà', 'Phải chi', 'Nhưng', 'Hơi...'. Theo định nghĩa, Complaint (1) thường đi kèm mong muốn giải quyết hoặc sự thất vọng giữa kỳ vọng và thực tế. Câu này có chứa Wish/Suggestion ẩn sau lời khen không?",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - ĐÁNH GIÁ SỰ PHÙ HỢP: Nếu text tiêu cực, nó có phải là một lời phàn nàn hợp lý (Complaint) hay chỉ là toxic/spam (Non-complaint)?",
+                question="Bước 3 - XÁC MINH TÍNH XÂY DỰNG (CONSTRUCTIVE): Complaint (1) phải mang tính xây dựng. Câu này có đưa ra vấn đề cụ thể để người bán cải thiện không? Hay chỉ là cảm xúc tiêu cực vô cớ?",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - QUYẾT ĐỊNH: Dựa trên cả title và text, label nào phù hợp (0 hay 1)? Nhớ rằng Hate Speech = Label 0.",
+                question="Bước 4 - PHÁN QUYẾT CUỐI CÙNG: Dựa trên 3 bước soi mói trên, hãy chọn nhãn. (Nhắc lại: Chửi bới thô tục = 0; Khen + Góp ý nhẹ = 1).",
             ),
         ]
 
