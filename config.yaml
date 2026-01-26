@@ -10,7 +10,7 @@ provider:
 # NVIDIA NIM API settings (OpenAI-compatible)
 nvidia:
   enabled: true
-  model: "meta/llama-3.1-70b-instruct"
+  model: "meta/llama-3.3-70b-instruct"
   # Optional: base_url for other OpenAI-compatible endpoints
   base_url: "" 
   temperature: 0.1
@@ -52,7 +52,7 @@ task:
   description: "Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt."
   
   labels:
-    "0": "Non-complaint (Label 0) - Gồm 2 loại: (1) Khen ngợi/Hài lòng (Tích cực). (2) Chửi bới/Xúc phạm nặng nề/Hateful speech (Tiêu cực nhưng KHÔNG mang tính xây dựng/góp ý)."
+    "0": "Non-complaint (Label 0) - Khen ngợi, hài lòng, tích cực về sản phẩm/dịch vụ. KHÔNG có phàn nàn hay góp ý gì. Bao gồm cả chửi bới/Hateful KHÔNG mang tính xây dựng."
     "1": "Complaint (Label 1) - Phàn nàn, góp ý, mong muốn (Wish), cảnh báo. Thể hiện sự không hài lòng giữa kỳ vọng và thực tế. Mang tính xây dựng (Constructive). Kể cả câu có cả khen lẫn chê (Mixed)."
   
   columns:

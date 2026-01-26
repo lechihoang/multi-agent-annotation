@@ -129,10 +129,10 @@ class TaskConfig:
 
 @dataclass
 class NvidiaConfig:
-    """NVIDIA NIM API configuration."""
+    """NVIDIA NIM API configuration (loaded from config.yaml)."""
 
     api_key: str = ""
-    model: str = "meta/llama-3.1-70b-instruct"
+    model: str = ""  # Loaded from config.yaml
     base_url: str = ""
     temperature: float = 0.1
     max_tokens: int = 512
@@ -201,7 +201,7 @@ def load_config(config_path: str = "config.yaml") -> Config:
             api_key=get("nvidia.api_key", "")
             or os.getenv("NVIDIA_API_KEY", "")
             or os.getenv("NIM_API_KEY", ""),
-            model=get("nvidia.model", "meta/llama-3.1-70b-instruct"),
+            model=get("nvidia.model", ""),  # Must be set in config.yaml
             base_url=get("nvidia.base_url", ""),
             temperature=float(get("nvidia.temperature", 0.1)),
             max_tokens=int(get("nvidia.max_tokens", 512)),

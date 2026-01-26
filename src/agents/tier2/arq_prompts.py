@@ -56,8 +56,8 @@ class ARQPromptBuilder:
 
         # Default fallback if config missing (should not happen in prod)
         return {
-            "0": "Non-complaint - Bình luận tích cực, khen ngợi, hỏi đáp, hoặc trung tính.",
-            "1": "Complaint - Phàn nàn về sản phẩm, dịch vụ, giao hàng, đóng gói.",
+            "0": "Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.",
+            "1": "Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.",
         }
 
     @staticmethod
@@ -170,19 +170,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - PHÂN TÍCH CẢM XÚC & TỪ NGỮ: Comment thể hiện sự hài lòng (khen) hay không hài lòng (chê)? Có từ ngữ thô tục, chửi bới, xúc phạm (Hateful/Profanity) không?",
+                question="Bước 1 - PHÂN TÍCH CẢM XÚC: Comment thể hiện sự hài lòng (khen) hay không hài lòng (chê/phàn nàn/góp ý)?",
             ),
             ARQQuery(
                 id=2,
-                question="Bước 2 - ĐÁNH GIÁ TÍNH XÂY DỰNG (CONSTRUCTIVE): Nếu là chê, người viết có đưa ra lý do cụ thể, cảnh báo, hay mong muốn giải quyết (Wish) không? Hay chỉ chửi đổng vô cớ (Non-constructive)?",
+                question="Bước 2 - TÌM DẤU HIỆU PHÀN NÀN: Có từ/cụm từ thể hiện sự thất vọng, mong muốn cải thiện, góp ý, cảnh báo không? (VD: 'nhưng', 'tuy nhiên', 'phải chi', 'giá mà', 'hơi', 'chưa', 'không được', 'lâu', 'chậm', 'thiếu'...)",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - XÁC ĐỊNH ĐỐI TƯỢNG PHÀN NÀN: Có sự phàn nàn cụ thể về sản phẩm/dịch vụ/giao hàng không? (Lưu ý: Chê nhưng không mang tính xây dựng hoặc chửi bới nặng nề được coi là Non-complaint/Toxic).",
+                question="Bước 3 - KIỂM TRA MIXED CONTENT: Comment có VỪA khen VỪA chê không? (VD: 'đẹp nhưng hơi nhỏ', 'tốt nhưng giao chậm'). Nếu có BẤT KỲ phàn nàn/góp ý nào → Label 1.",
             ),
             ARQQuery(
                 id=4,
-                question=f"Bước 4 - QUYẾT ĐỊNH: Dựa trên định nghĩa (Label 1 = Constructive Complaint, Label 0 = Khen hoặc Chửi bới/Non-constructive), hãy chọn nhãn phù hợp nhất.",
+                question="Bước 4 - QUYẾT ĐỊNH: Label 1 = Có phàn nàn/góp ý/chê (kể cả mixed). Label 0 = Chỉ khen ngợi thuần túy, không có bất kỳ phàn nàn nào.",
             ),
         ]
 
@@ -191,25 +191,25 @@ class ARQPromptBuilder:
         """Critic agent (formerly Contextual): Devil's Advocate analysis based on Olshtain & Weinbach.
 
         Focuses on verifying strictly against the definition constraints:
-        - Complaint (1) MUST be constructive and show dissatisfaction/unmet expectation.
-        - Non-complaint (0) includes compliments AND non-constructive hate speech/insults.
+        - Complaint (1) shows dissatisfaction, unmet expectation, suggestion, warning.
+        - Non-complaint (0) is PURE satisfaction/praise with NO complaints.
         """
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - CRITIC CHECK (HATE SPEECH): Tìm kỹ các từ ngữ thô tục, xúc phạm, chửi thề (L**, c**, ngu, lừa đảo...). Theo định nghĩa, nếu chỉ có chửi bới mà KHÔNG mang tính xây dựng -> Phải là Label 0 (Non-complaint). Câu này có vi phạm không?",
+                question="Bước 1 - TÌM PHÀN NÀN ẨN: Đọc kỹ từng từ. Có bất kỳ dấu hiệu không hài lòng nào không? (giao chậm, thiếu, lỗi, không đúng, hơi, chưa...)",
             ),
             ARQQuery(
                 id=2,
-                question="Bước 2 - CRITIC CHECK (UNMET EXPECTATIONS): Tìm các cấu trúc 'Tuy nhiên', 'Giá mà', 'Phải chi', 'Nhưng', 'Hơi...'. Theo định nghĩa, Complaint (1) thường đi kèm mong muốn giải quyết hoặc sự thất vọng giữa kỳ vọng và thực tế. Câu này có chứa Wish/Suggestion ẩn sau lời khen không?",
+                question="Bước 2 - CHECK WISH/SUGGESTION: Tìm các cấu trúc 'Giá mà', 'Phải chi', 'Mong', 'Nên', 'Cần'... Đây là dấu hiệu của Complaint (Label 1).",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - XÁC MINH TÍNH XÂY DỰNG (CONSTRUCTIVE): Complaint (1) phải mang tính xây dựng. Câu này có đưa ra vấn đề cụ thể để người bán cải thiện không? Hay chỉ là cảm xúc tiêu cực vô cớ?",
+                question="Bước 3 - CHECK MIXED CONTENT: Có pattern 'khen + nhưng/tuy nhiên + chê' không? VD: 'đẹp nhưng mỏng', 'tốt nhưng giao lâu'. Mixed = Label 1.",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - PHÁN QUYẾT CUỐI CÙNG: Dựa trên 3 bước soi mói trên, hãy chọn nhãn. (Nhắc lại: Chửi bới thô tục = 0; Khen + Góp ý nhẹ = 1).",
+                question="Bước 4 - PHÁN QUYẾT: Nếu có BẤT KỲ phàn nàn/góp ý/wish nào → Label 1. Chỉ khi THUẦN khen ngợi, không có gì tiêu cực → Label 0.",
             ),
         ]
 
@@ -219,19 +219,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - PHÂN TÍCH VÍ DỤ: Các ví dụ tương tự được gán nhãn như thế nào? Chú ý các ví dụ có từ ngữ tiêu cực/chửi bới nhưng gán nhãn 0.",
+                question="Bước 1 - PHÂN TÍCH VÍ DỤ: Các ví dụ tương tự được gán nhãn như thế nào? Chú ý pattern: có phàn nàn → Label 1, chỉ khen → Label 0.",
             ),
             ARQQuery(
                 id=2,
-                question=f"Bước 2 - SO SÁNH TÍNH XÂY DỰNG: Comment '{text}' có mang tính xây dựng (constructive) giống các ví dụ Complaint (1) không? Hay giống các ví dụ Toxic/Non-complaint (0)?",
+                question=f"Bước 2 - SO SÁNH: Comment '{text}' giống ví dụ nào hơn? Ví dụ có phàn nàn/góp ý (Label 1) hay ví dụ thuần khen (Label 0)?",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - PATTERN MATCHING: Có từ khóa chửi thề (profanity) hay xúc phạm nào xuất hiện? (Nếu có -> xu hướng về Label 0).",
+                question="Bước 3 - PATTERN MATCHING: Comment có chứa từ khóa phàn nàn (chậm, lâu, thiếu, lỗi, không đúng, hơi...) không?",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - QUYẾT ĐỊNH: Dựa trên similarity, label nào phù hợp? (Label 1 = Complaint có tính xây dựng).",
+                question="Bước 4 - QUYẾT ĐỊNH: Dựa trên similarity với ví dụ. Label 1 = Có phàn nàn. Label 0 = Thuần khen ngợi.",
             ),
         ]
 
@@ -241,19 +241,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - EDGE CASE ANALYSIS: Kiểm tra xem đây có phải là Edge Case: 'Chửi bới/Hateful' (Label 0) hoặc 'Khen nhưng thất vọng/Wish' (Label 1) không?",
+                question="Bước 1 - EDGE CASE: Kiểm tra các trường hợp khó: 'Khen nhưng có góp ý nhẹ' (Label 1) vs 'Khen thuần túy' (Label 0).",
             ),
             ARQQuery(
                 id=2,
-                question=f"Bước 2 - AMBIGUOUS CHECK: Comment '{text}' có mỉa mai (sarcasm) không? Có chửi thề (Profanity) không? (Chửi thề -> Non-complaint).",
+                question=f"Bước 2 - AMBIGUOUS CHECK: Comment '{text}' có ẩn ý phàn nàn không? (VD: 'được', 'tạm', 'cũng ok' có thể là khen miễn cưỡng)",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - DECISION: Phân loại dứt khoát. Complaint (1) phải có ý định góp ý/phàn nàn cụ thể. Toxic/Hateful (0) chỉ là xả giận vô cớ.",
+                question="Bước 3 - DECISION: Nếu có BẤT KỲ dấu hiệu không hài lòng, góp ý, wish → Label 1. Chỉ thuần khen → Label 0.",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - REASONING: Giải thích tại sao chọn label này, đặc biệt nếu comment chứa từ ngữ tiêu cực.",
+                question="Bước 4 - REASONING: Giải thích rõ tại sao chọn label, đặc biệt với các comment mixed hoặc ambiguous.",
             ),
         ]
 

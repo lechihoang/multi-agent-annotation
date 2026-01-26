@@ -36,7 +36,7 @@ class NimClient:
 
     def __init__(
         self,
-        model: str = "meta/llama-3.1-70b-instruct",
+        model: Optional[str] = None,
         temperature: float = 0.1,
         max_tokens: int = 512,
         base_url: Optional[str] = None,
@@ -45,7 +45,7 @@ class NimClient:
         """Initialize NIM client.
 
         Args:
-            model: Model name (e.g., "meta/llama-3.1-70b-instruct")
+            model: Model name (loaded from config.yaml if not provided)
             temperature: Sampling temperature (0.0 - 1.0)
             max_tokens: Maximum tokens to generate
             base_url: NIM API base URL (auto-detected if not provided)
@@ -62,6 +62,12 @@ class NimClient:
                 raise ValueError(
                     "NIM_API_KEY or NVIDIA_API_KEY environment variable is required"
                 )
+
+            # Load model from config.yaml if not provided
+            if model is None:
+                from src.config import get_config
+                config = get_config()
+                model = config.nvidia.model
 
             # Set base URL
             if base_url:
@@ -258,11 +264,14 @@ class NimClient:
 
 # Factory function to get the appropriate client
 def get_nim_client(
-    model: str = "meta/llama-3.1-70b-instruct",
+    model: Optional[str] = None,
     temperature: float = 0.1,
     max_tokens: int = 512,
 ) -> Optional[NimClient]:
-    """Create and return NIM client if API key is available."""
+    """Create and return NIM client if API key is available.
+
+    Model is loaded from config.yaml if not provided.
+    """
     api_key = os.getenv("NIM_API_KEY") or os.getenv("NVIDIA_API_KEY")
     if not api_key:
         return None
