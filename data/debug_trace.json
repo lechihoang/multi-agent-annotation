@@ -1,0 +1,377 @@
+[
+  {
+    "task_id": "b1_0",
+    "tier": 1,
+    "agent": "query_expander",
+    "input": "mùi huong thơm .luc mua thay cái anh nuoc tẩy trang tuong  được  tặng ma không  được  hơi bạn xíu nhung van hài lòng",
+    "output": "mùi huong thơm .luc mua thay cái anh nuoc tẩy trang tuong  được  tặng ma không  được  hơi bạn xíu nhung van hài lòng khởi_động hoà_đồng chủ_động tương_đối đàng_hoàn",
+    "method": "embedding"
+  },
+  {
+    "task_id": "b1_0",
+    "tier": 2,
+    "agent": "primary",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.8\", \"reasoning\": \"Comment thể hiện sự hài lòng nhưng cũng có góp ý về sản phẩm ('mùi huong thơm' và 'van hài lòng' cho thấy sự hài lòng, nhưng 'luc mua thay cái anh nuoc tẩy trang tuong được tặng ma không được hơi bạn xíu' cho thấy một chút không hài lòng về sản phẩm tặng kèm). Điều này cho thấy comment có mixed content, vừa khen vừa chê. Vì góp ý mang tính xây dựng, nên label 1 được chọn.\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.8,
+      "reasoning": "Comment thể hiện sự hài lòng nhưng cũng có góp ý về sản phẩm ('mùi huong thơm' và 'van hài lòng' cho thấy sự hài lòng, nhưng 'luc mua thay cái anh nuoc tẩy trang tuong được tặng ma không được hơi bạn "
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_0",
+    "tier": 2,
+    "agent": "contextual",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "```json\n{\n  \"final_label\": \"1\",\n  \"confidence\": \"0.8\",\n  \"reasoning\": \"Comment có chứa từ 'không được hơi bạn xíu' chỉ ra một điểm không hài lòng, tuy nhiên nó được cân bằng bởi 'van hài lòng' cho thấy khách hàng vẫn có mức độ hài lòng nhất định. Từ 'nhưng' cũng chỉ ra sự tương phản giữa hai ý, một là hài lòng và hai là một điểm không hài lòng nhỏ. Do đó, đây được coi là một góp ý mang tính xây dựng.\"\n}\n```",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.8,
+      "reasoning": "Comment có chứa từ 'không được hơi bạn xíu' chỉ ra một điểm không hài lòng, tuy nhiên nó được cân bằng bởi 'van hài lòng' cho thấy khách hàng vẫn có mức độ hài lòng nhất định. Từ 'nhưng' cũng chỉ ra s"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_0",
+    "tier": 2,
+    "agent": "retrieval",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.8\", \"reasoning\": \"Comment có chứa cả phần khen ngợi (mùi huong thơm) và góp ý về sản phẩm không được như mong đợi (không được hơi bạn xíu), nhưng vẫn thể hiện sự hài lòng. Điều này cho thấy người dùng có góp ý xây dựng về sản phẩm, nên được gán nhãn 1. Độ tin tưởng là 0.8 vì comment có cả hai yếu tố khen và phàn nàn, nhưng phần phàn nàn không quá gay gắt.\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.8,
+      "reasoning": "Comment có chứa cả phần khen ngợi (mùi huong thơm) và góp ý về sản phẩm không được như mong đợi (không được hơi bạn xíu), nhưng vẫn thể hiện sự hài lòng. Điều này cho thấy người dùng có góp ý xây dựng"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_0",
+    "tier": 2,
+    "agent": "hybrid",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "```json\n{\n  \"final_label\": \"1\",\n  \"confidence\": \"0.8\",\n  \"reasoning\": \"Comment có chứa cả phần khen ngợi ('mùi huong thơm') và góp ý nhẹ ('không được hơi bạn xíu'), nhưng vẫn thể hiện sự hài lòng ('van hài lòng'). Điều này cho thấy người dùng có một số góp ý nhưng vẫn đánh giá tích cực về sản phẩm/dịch vụ. Do đó, nó được phân loại là phàn nàn/góp ý mang tính xây dựng.\"\n}\n```",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.8,
+      "reasoning": "Comment có chứa cả phần khen ngợi ('mùi huong thơm') và góp ý nhẹ ('không được hơi bạn xíu'), nhưng vẫn thể hiện sự hài lòng ('van hài lòng'). Điều này cho thấy người dùng có một số góp ý nhưng vẫn đá"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_1",
+    "tier": 1,
+    "agent": "query_expander",
+    "input": "như hàng nhái tem mác sơ xài",
+    "output": "như hàng nhái tem mác sơ xài hàng,nhờ nhãn_mác nhoêu nhỏ_xíu nhiệm",
+    "method": "embedding"
+  },
+  {
+    "task_id": "b1_1",
+    "tier": 2,
+    "agent": "primary",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "```json\n{\n  \"final_label\": \"1\",\n  \"confidence\": \"0.9\",\n  \"reasoning\": \"Comment thể hiện không hài lòng/phàn nàn về sản phẩm, cụ thể là so sánh với hàng nhái và sử dụng từ 'sơ xài' để mô tả. Điều này cho thấy người dùng không hài lòng với chất lượng sản phẩm. Mặc dù comment có thể được xem là tiêu cực, nhưng nó vẫn mang tính xây dựng vì nó chỉ ra một vấn đề cụ thể mà doanh nghiệp có thể cải thiện. Do đó, label 1 được chọn cho comment này.\"\n}\n```",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Comment thể hiện không hài lòng/phàn nàn về sản phẩm, cụ thể là so sánh với hàng nhái và sử dụng từ 'sơ xài' để mô tả. Điều này cho thấy người dùng không hài lòng với chất lượng sản phẩm. Mặc dù comme"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_1",
+    "tier": 2,
+    "agent": "contextual",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "```json\n{\n  \"final_label\": \"1\",\n  \"confidence\": \"0.9\",\n  \"reasoning\": \"Comment 'như hàng nhái tem mác sơ xài' thể hiện sự không hài lòng về chất lượng sản phẩm, với cụm từ 'hàng nhái' và 'sơ xài' mang tính tiêu cực. Không có dấu hiệu của việc khen ngợi thuần túy hoặc chửi bới/xúc phạm/hate speech không mang tính xây dựng. Do đó, comment này được phân loại là phàn nàn/góp ý mang tính xây dựng, với Label 1.\"\n}\n```",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Comment 'như hàng nhái tem mác sơ xài' thể hiện sự không hài lòng về chất lượng sản phẩm, với cụm từ 'hàng nhái' và 'sơ xài' mang tính tiêu cực. Không có dấu hiệu của việc khen ngợi thuần túy hoặc chử"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_1",
+    "tier": 2,
+    "agent": "retrieval",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.9\", \"reasoning\": \"Comment 'như hàng nhái tem mác sơ xài' thể hiện sự không hài lòng về chất lượng sản phẩm, ngụ ý rằng sản phẩm có thể là hàng giả hoặc không đạt tiêu chuẩn. Điều này cho thấy người dùng đang góp ý và phàn nàn về sản phẩm, mong muốn cải thiện chất lượng. Do đó, nó được phân loại là phàn nàn (Label 1) với độ tin tưởng cao (0.9) vì nó rõ ràng thể hiện sự không hài lòng và góp ý cụ thể.\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Comment 'như hàng nhái tem mác sơ xài' thể hiện sự không hài lòng về chất lượng sản phẩm, ngụ ý rằng sản phẩm có thể là hàng giả hoặc không đạt tiêu chuẩn. Điều này cho thấy người dùng đang góp ý và p"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_1",
+    "tier": 2,
+    "agent": "hybrid",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "```json\n{\n  \"final_label\": \"1\",\n  \"confidence\": \"0.9\",\n  \"reasoning\": \"Comment 'như hàng nhái tem mác sơ xài' thể hiện sự không hài lòng về chất lượng sản phẩm, ngụ ý rằng sản phẩm có thể là hàng giả hoặc không đạt tiêu chuẩn. Điều này cho thấy người dùng có góp ý và kỳ vọng về sản phẩm, nhưng sản phẩm không đáp ứng được. Do đó, đây là một phàn nàn mang tính xây dựng và được gán nhãn 1.\"\n}\n```",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Comment 'như hàng nhái tem mác sơ xài' thể hiện sự không hài lòng về chất lượng sản phẩm, ngụ ý rằng sản phẩm có thể là hàng giả hoặc không đạt tiêu chuẩn. Điều này cho thấy người dùng có góp ý và kỳ "
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_2",
+    "tier": 1,
+    "agent": "query_expander",
+    "input": "sản phẩm đóng gói chắc chắn, thời gian giao hàng nhanh, vô cùng hài lòng.",
+    "output": "sản phẩm đóng gói chắc chắn, thời gian giao hàng nhanh, vô cùng hài lòng. hãng,đóng đáng_giá giải_đáp đóng_gói được,nhưng",
+    "method": "embedding"
+  },
+  {
+    "task_id": "b1_2",
+    "tier": 2,
+    "agent": "primary",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "```json\n{\n  \"final_label\": \"0\",\n  \"confidence\": \"1.0\",\n  \"reasoning\": \"Comment thể hiện sự hài lòng và khen ngợi về sản phẩm và dịch vụ giao hàng, không có bất kỳ góp ý hoặc phàn nàn nào.\"\n}\n```",
+    "parsed": {
+      "label": "0",
+      "confidence": 1.0,
+      "reasoning": "Comment thể hiện sự hài lòng và khen ngợi về sản phẩm và dịch vụ giao hàng, không có bất kỳ góp ý hoặc phàn nàn nào."
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_2",
+    "tier": 2,
+    "agent": "contextual",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"0\", \"confidence\": \"0.99\", \"reasoning\": \"Comment thể hiện sự hài lòng hoàn toàn với sản phẩm và dịch vụ, không có dấu hiệu của phàn nàn hoặc góp ý. Các từ ngữ như 'đóng gói chắc chắn', 'thời gian giao hàng nhanh', 'vô cùng hài lòng' cho thấy khách hàng rất hài lòng với trải nghiệm của mình. Không có dấu hiệu của phàn nàn ẩn, cũng không có cấu trúc gợi ý hoặc góp ý. Do đó, quyết định cuối cùng là Label 0, với độ tin tưởng cao 0.99.\"}",
+    "parsed": {
+      "label": "0",
+      "confidence": 0.99,
+      "reasoning": "Comment thể hiện sự hài lòng hoàn toàn với sản phẩm và dịch vụ, không có dấu hiệu của phàn nàn hoặc góp ý. Các từ ngữ như 'đóng gói chắc chắn', 'thời gian giao hàng nhanh', 'vô cùng hài lòng' cho thấy"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_2",
+    "tier": 2,
+    "agent": "retrieval",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"0\", \"confidence\": \"0.95\", \"reasoning\": \"Comment 'sản phẩm đóng gói chắc chắn, thời gian giao hàng nhanh, vô cùng hài lòng.' thể hiện sự hài lòng và khen ngợi thuần túy về sản phẩm và dịch vụ giao hàng, không có góp ý hoặc phàn nàn nào được đề cập. Điều này tương tự như các ví dụ được gán nhãn 0, nơi khách hàng chỉ khen ngợi mà không có bất kỳ góp ý xây dựng nào. Do đó, dựa trên phân tích và so sánh, quyết định cuối cùng là gán nhãn 0 cho comment này với độ tin tưởng cao.\"}",
+    "parsed": {
+      "label": "0",
+      "confidence": 0.95,
+      "reasoning": "Comment 'sản phẩm đóng gói chắc chắn, thời gian giao hàng nhanh, vô cùng hài lòng.' thể hiện sự hài lòng và khen ngợi thuần túy về sản phẩm và dịch vụ giao hàng, không có góp ý hoặc phàn nàn nào được "
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_2",
+    "tier": 2,
+    "agent": "hybrid",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"0\", \"confidence\": \"0.99\", \"reasoning\": \"Comment thể hiện sự hài lòng hoàn toàn với sản phẩm và dịch vụ, không có góp ý hoặc phàn nàn nào. Các từ ngữ như 'đóng gói chắc chắn', 'thời gian giao hàng nhanh', và 'vô cùng hài lòng' cho thấy một thái độ tích cực và không có ẩn ý phàn nàn. Do đó, đây là một trường hợp của 'Khen thuần túy' và được gán nhãn 0.\"}",
+    "parsed": {
+      "label": "0",
+      "confidence": 0.99,
+      "reasoning": "Comment thể hiện sự hài lòng hoàn toàn với sản phẩm và dịch vụ, không có góp ý hoặc phàn nàn nào. Các từ ngữ như 'đóng gói chắc chắn', 'thời gian giao hàng nhanh', và 'vô cùng hài lòng' cho thấy một t"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_3",
+    "tier": 1,
+    "agent": "query_expander",
+    "input": "hang ok,dong goi can than.. chưa nhận được hoá đơn",
+    "output": "hang ok,dong goi can than.. chưa nhận được hoá đơn đóng_gói đàng_hoàn hoá_đơn đại_hội hỏi_đáp",
+    "method": "embedding"
+  },
+  {
+    "task_id": "b1_3",
+    "tier": 2,
+    "agent": "primary",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.9\", \"reasoning\": \"Comment thể hiện sự không hài lòng về việc chưa nhận được hóa đơn, mặc dù đánh giá sản phẩm là 'ok'. Điều này cho thấy người dùng có góp ý mang tính xây dựng về dịch vụ giao hàng và quản lý đơn hàng, nên được phân loại là phàn nàn/góp ý.\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Comment thể hiện sự không hài lòng về việc chưa nhận được hóa đơn, mặc dù đánh giá sản phẩm là 'ok'. Điều này cho thấy người dùng có góp ý mang tính xây dựng về dịch vụ giao hàng và quản lý đơn hàng, "
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_3",
+    "tier": 2,
+    "agent": "contextual",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.9\", \"reasoning\": \"Trong comment có từ 'chưa nhận được hoá đơn' thể hiện sự không hài lòng về dịch vụ giao hàng hoặc quá trình xử lý đơn hàng, đây là dấu hiệu của Complaint (Label 1). Ngoài ra, từ 'cần' trong 'dong goi can than' cũng ngụ ý một sự góp ý hoặc mong muốn cải thiện, phù hợp với Label 1. Mặc dù có từ 'hang ok' cho thấy sản phẩm là ổn, nhưng sự không hài lòng về quá trình giao hàng và nhận hóa đơn vẫn là một vấn đề cần được giải quyết, do đó, comment này được phân loại là Complaint (Label 1).\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Trong comment có từ 'chưa nhận được hoá đơn' thể hiện sự không hài lòng về dịch vụ giao hàng hoặc quá trình xử lý đơn hàng, đây là dấu hiệu của Complaint (Label 1). Ngoài ra, từ 'cần' trong 'dong goi "
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_3",
+    "tier": 2,
+    "agent": "retrieval",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.9\", \"reasoning\": \"Comment 'hang ok,dong goi can than.. chưa nhận được hoá đơn' thể hiện sự không hài lòng về việc chưa nhận được hóa đơn, điều này cho thấy người dùng có kỳ vọng chưa được đáp ứng và mong muốn cải thiện. Mặc dù có từ 'ok' nhưng nó không đủ để che lấp đi sự không hài lòng về vấn đề hóa đơn. Do đó, comment này được phân loại là phàn nàn/góp ý mang tính xây dựng (Label 1).\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Comment 'hang ok,dong goi can than.. chưa nhận được hoá đơn' thể hiện sự không hài lòng về việc chưa nhận được hóa đơn, điều này cho thấy người dùng có kỳ vọng chưa được đáp ứng và mong muốn cải thiện"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_3",
+    "tier": 2,
+    "agent": "hybrid",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "```json\n{\n  \"final_label\": \"1\",\n  \"confidence\": \"0.9\",\n  \"reasoning\": \"Comment 'hang ok,dong goi can than.. chưa nhận được hoá đơn' thể hiện sự không hài lòng về việc chưa nhận được hóa đơn, mặc dù sản phẩm được đánh giá là 'ok'. Điều này cho thấy người dùng có góp ý và kỳ vọng về dịch vụ, nên được phân loại là phàn nàn/góp ý mang tính xây dựng.\"\n}\n```",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Comment 'hang ok,dong goi can than.. chưa nhận được hoá đơn' thể hiện sự không hài lòng về việc chưa nhận được hóa đơn, mặc dù sản phẩm được đánh giá là 'ok'. Điều này cho thấy người dùng có góp ý và "
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_4",
+    "tier": 1,
+    "agent": "query_expander",
+    "input": "sản phẩm tệ",
+    "output": "sản phẩm tệ sản_phẩm săn sẩn sạn sần",
+    "method": "embedding"
+  },
+  {
+    "task_id": "b1_4",
+    "tier": 2,
+    "agent": "primary",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.95\", \"reasoning\": \"Comment thể hiện không hài lòng/phàn nàn về sản phẩm với từ ngữ 'tệ', không có dấu hiệu của khen ngợi hay hài lòng. Từ ngữ này mang tính tiêu cực và góp ý cho sản phẩm, không phải chửi bới/xúc phạm/hate speech. Do đó, nó được coi là góp ý mang tính xây dựng và được gán nhãn 1.\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.95,
+      "reasoning": "Comment thể hiện không hài lòng/phàn nàn về sản phẩm với từ ngữ 'tệ', không có dấu hiệu của khen ngợi hay hài lòng. Từ ngữ này mang tính tiêu cực và góp ý cho sản phẩm, không phải chửi bới/xúc phạm/ha"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_4",
+    "tier": 2,
+    "agent": "contextual",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.95\", \"reasoning\": \"Comment có chứa từ 'tệ' thể hiện sự không hài lòng về sản phẩm, không có dấu hiệu của khen ngợi thuần túy hay chửi bới/xúc phạm/hate speech không mang tính xây dựng. Từ 'tệ' là một dấu hiệu rõ ràng của phàn nàn, góp ý về chất lượng sản phẩm.\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.95,
+      "reasoning": "Comment có chứa từ 'tệ' thể hiện sự không hài lòng về sản phẩm, không có dấu hiệu của khen ngợi thuần túy hay chửi bới/xúc phạm/hate speech không mang tính xây dựng. Từ 'tệ' là một dấu hiệu rõ ràng củ"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_4",
+    "tier": 2,
+    "agent": "retrieval",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.9\", \"reasoning\": \"Comment 'sản phẩm tệ' thể hiện sự không hài lòng về sản phẩm, điều này tương tự như các ví dụ phàn nàn/góp ý xây dựng được gán nhãn 1. Mặc dù comment này không cung cấp thông tin cụ thể về vấn đề, nhưng nó vẫn thể hiện kỳ vọng chưa đáp ứng và mong muốn cải thiện. Do đó, nó được phân loại là phàn nàn/góp ý mang tính xây dựng.\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.9,
+      "reasoning": "Comment 'sản phẩm tệ' thể hiện sự không hài lòng về sản phẩm, điều này tương tự như các ví dụ phàn nàn/góp ý xây dựng được gán nhãn 1. Mặc dù comment này không cung cấp thông tin cụ thể về vấn đề, như"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_4",
+    "tier": 2,
+    "agent": "hybrid",
+    "prompt": "Bạn là chuyên gia Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt..\n\nNHIỆM VỤ: Phân loại comment dựa trên các nhãn sau:\n\nLABELS:\n  - 0: Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.\n  - 1: Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.\n\nQUY TẮC QUAN TRỌNG:\n- Đọc kỹ và phân tích comment theo từng bước\n- Xem xét ngữ cảnh nếu có\n- Dựa vào ví dụ minh họa nếu được cung cấp\n- Đưa ra quyết định cuối cùng với reasoning rõ ràng\n- Confide",
+    "raw_response": "{\"final_label\": \"1\", \"confidence\": \"0.95\", \"reasoning\": \"Comment 'sản phẩm tệ' thể hiện rõ ràng sự không hài lòng về sản phẩm, không có dấu hiệu của việc khen ngợi thuần túy hay chửi bới/xúc phạm không xây dựng. Do đó, nó được phân loại là phàn nàn/góp ý mang tính xây dựng, tương ứng với Label 1.\"}",
+    "parsed": {
+      "label": "1",
+      "confidence": 0.95,
+      "reasoning": "Comment 'sản phẩm tệ' thể hiện rõ ràng sự không hài lòng về sản phẩm, không có dấu hiệu của việc khen ngợi thuần túy hay chửi bới/xúc phạm không xây dựng. Do đó, nó được phân loại là phàn nàn/góp ý ma"
+    },
+    "error": null
+  },
+  {
+    "task_id": "b1_0",
+    "tier": 3,
+    "agent": "judge",
+    "input": {
+      "avg_confidence": 0.8,
+      "votes": {
+        "1": 4
+      }
+    },
+    "output": {
+      "final_label": "1",
+      "decision": "review"
+    }
+  },
+  {
+    "task_id": "b1_1",
+    "tier": 3,
+    "agent": "judge",
+    "input": {
+      "avg_confidence": 0.9,
+      "votes": {
+        "1": 4
+      }
+    },
+    "output": {
+      "final_label": "1",
+      "decision": "approve"
+    }
+  },
+  {
+    "task_id": "b1_2",
+    "tier": 3,
+    "agent": "judge",
+    "input": {
+      "avg_confidence": 0.9824999999999999,
+      "votes": {
+        "0": 4
+      }
+    },
+    "output": {
+      "final_label": "0",
+      "decision": "approve"
+    }
+  },
+  {
+    "task_id": "b1_3",
+    "tier": 3,
+    "agent": "judge",
+    "input": {
+      "avg_confidence": 0.9,
+      "votes": {
+        "1": 4
+      }
+    },
+    "output": {
+      "final_label": "1",
+      "decision": "approve"
+    }
+  },
+  {
+    "task_id": "b1_4",
+    "tier": 3,
+    "agent": "judge",
+    "input": {
+      "avg_confidence": 0.9375,
+      "votes": {
+        "1": 4
+      }
+    },
+    "output": {
+      "final_label": "1",
+      "decision": "approve"
+    }
+  }
+]

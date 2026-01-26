@@ -1,0 +1,6 @@
+﻿text,final_label,confidence,decision
+mùi huong thơm .luc mua thay cái anh nuoc tẩy trang tuong  được  tặng ma không  được  hơi bạn xíu nhung van hài lòng,1,0.8,review
+như hàng nhái tem mác sơ xài,1,0.9,approve
+"sản phẩm đóng gói chắc chắn, thời gian giao hàng nhanh, vô cùng hài lòng.",0,0.9824999999999999,approve
+"hang ok,dong goi can than.. chưa nhận được hoá đơn",1,0.9,approve
+sản phẩm tệ,1,0.9375,approve

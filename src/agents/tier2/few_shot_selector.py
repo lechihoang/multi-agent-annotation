@@ -57,17 +57,44 @@ class FewShotSelector:
                 examples = []
                 with open(self.training_data_path, "r", encoding="utf-8-sig") as f:
                     reader = csv.DictReader(f)
+                    cols = reader.fieldnames or []
+                    # Flexible column matching (like RetrievalAgent)
+                    text_col = next(
+                        (c for c in cols if c.lower() in ["comment", "text", "content", "review"]),
+                        None,
+                    )
+                    label_col = next(
+                        (c for c in cols if c.lower() in ["label", "rating", "toxicity"]),
+                        None,
+                    )
+                    title_col = next(
+                        (c for c in cols if c.lower() in ["title"]),
+                        None,
+                    )
+                    topic_col = next(
+                        (c for c in cols if c.lower() in ["topic", "domain"]),
+                        None,
+                    )
+                    if not text_col or not label_col:
+                        raise ValueError(
+                            f"Could not identify text/label columns in {self.training_data_path}. "
+                            f"Found columns: {cols}. Expected text column (comment/text/content/review) "
+                            f"and label column (label/rating/toxicity)."
+                        )
                     for row in reader:
-                        comment = row.get("Comment", "").strip()
-                        toxicity = row.get("Toxicity", "").strip()
-                        if comment and toxicity in ["0", "1"]:
+                        comment = row.get(text_col, "").strip()
+                        label_val = row.get(label_col, "").strip()
+                        # Normalize float labels like "0.0"/"1.0" to "0"/"1"
+                        if label_val in ["0.0", "1.0"]:
+                            label_val = label_val[0]
+                        if comment and label_val in ["0", "1"]:
                             examples.append(
                                 FewShotExample(
                                     text=comment,
-                                    label=toxicity,
+                                    label=label_val,
                                     metadata={
-                                        "title": row.get("Title", "").strip(),
-                                        "topic": row.get("Topic", "").strip(),
+                                        "title": row.get(title_col, "").strip() if title_col else "",
+                                        "topic": row.get(topic_col, "").strip() if topic_col else "",
                                     },
                                 )
                             )

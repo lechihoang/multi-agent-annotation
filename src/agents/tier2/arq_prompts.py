@@ -165,24 +165,24 @@ class ARQPromptBuilder:
 
     @staticmethod
     def _primary_queries(text: str) -> List[ARQQuery]:
-        """Primary agent: direct analysis."""
+        """Primary agent: direct analysis based on Olshtain & Weinbach definition."""
         labels = ARQPromptBuilder._get_labels()
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - PHÂN TÍCH CẢM XÚC: Comment thể hiện sự hài lòng (khen) hay không hài lòng (chê/phàn nàn/góp ý)?",
+                question="Bước 1 - PHÂN TÍCH NỘI DUNG: Comment thể hiện (a) hài lòng/khen, (b) không hài lòng/phàn nàn/góp ý, hay (c) chửi bới/xúc phạm/hate speech?",
             ),
             ARQQuery(
                 id=2,
-                question="Bước 2 - TÌM DẤU HIỆU PHÀN NÀN: Có từ/cụm từ thể hiện sự thất vọng, mong muốn cải thiện, góp ý, cảnh báo không? (VD: 'nhưng', 'tuy nhiên', 'phải chi', 'giá mà', 'hơi', 'chưa', 'không được', 'lâu', 'chậm', 'thiếu'...)",
+                question="Bước 2 - KIỂM TRA TÍNH XÂY DỰNG (Constructive): Nếu comment tiêu cực, nó có MANG TÍNH XÂY DỰNG không? Tức là: thể hiện kỳ vọng chưa được đáp ứng, góp ý cải thiện, cảnh báo, mong muốn (wish), gợi ý? Hay chỉ là chửi bới/xúc phạm/hate speech KHÔNG giúp doanh nghiệp cải thiện? (VD: 'Game như L** đừng tải' = xúc phạm, KHÔNG xây dựng → Label 0. 'Giao hàng chậm quá' = góp ý xây dựng → Label 1)",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - KIỂM TRA MIXED CONTENT: Comment có VỪA khen VỪA chê không? (VD: 'đẹp nhưng hơi nhỏ', 'tốt nhưng giao chậm'). Nếu có BẤT KỲ phàn nàn/góp ý nào → Label 1.",
+                question="Bước 3 - KIỂM TRA MIXED CONTENT: Comment có VỪA khen VỪA chê không? (VD: 'đẹp nhưng hơi nhỏ', 'tốt nhưng giao chậm'). Nếu có phàn nàn/góp ý mang tính xây dựng → Label 1.",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - QUYẾT ĐỊNH: Label 1 = Có phàn nàn/góp ý/chê (kể cả mixed). Label 0 = Chỉ khen ngợi thuần túy, không có bất kỳ phàn nàn nào.",
+                question="Bước 4 - QUYẾT ĐỊNH: Label 1 = Phàn nàn/góp ý/wish/cảnh báo MANG TÍNH XÂY DỰNG (kể cả mixed khen+chê). Label 0 = Khen ngợi thuần túy, hài lòng HOẶC chửi bới/xúc phạm/hate speech KHÔNG mang tính xây dựng.",
             ),
         ]
 
@@ -205,11 +205,11 @@ class ARQPromptBuilder:
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - CHECK MIXED CONTENT: Có pattern 'khen + nhưng/tuy nhiên + chê' không? VD: 'đẹp nhưng mỏng', 'tốt nhưng giao lâu'. Mixed = Label 1.",
+                question="Bước 3 - KIỂM TRA TÍNH XÂY DỰNG: Nếu comment tiêu cực, phân biệt: (a) Phàn nàn/góp ý mang tính xây dựng (kỳ vọng chưa đáp ứng, mong cải thiện) → Label 1. (b) Chửi bới/xúc phạm/hate speech KHÔNG xây dựng (VD: 'Game như L** đừng tải', 'ngu', 'rác') → Label 0. (c) Mixed khen+chê xây dựng → Label 1.",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - PHÁN QUYẾT: Nếu có BẤT KỲ phàn nàn/góp ý/wish nào → Label 1. Chỉ khi THUẦN khen ngợi, không có gì tiêu cực → Label 0.",
+                question="Bước 4 - PHÁN QUYẾT: Label 1 = Phàn nàn/góp ý/wish MANG TÍNH XÂY DỰNG (kể cả mixed). Label 0 = Khen ngợi thuần túy HOẶC chửi bới/xúc phạm/hate speech KHÔNG mang tính xây dựng.",
             ),
         ]
 
@@ -219,19 +219,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - PHÂN TÍCH VÍ DỤ: Các ví dụ tương tự được gán nhãn như thế nào? Chú ý pattern: có phàn nàn → Label 1, chỉ khen → Label 0.",
+                question="Bước 1 - PHÂN TÍCH VÍ DỤ: Các ví dụ tương tự được gán nhãn như thế nào? Chú ý pattern: phàn nàn xây dựng → Label 1, khen thuần/chửi bới không xây dựng → Label 0.",
             ),
             ARQQuery(
                 id=2,
-                question=f"Bước 2 - SO SÁNH: Comment '{text}' giống ví dụ nào hơn? Ví dụ có phàn nàn/góp ý (Label 1) hay ví dụ thuần khen (Label 0)?",
+                question=f"Bước 2 - SO SÁNH: Comment '{text}' giống ví dụ nào hơn? Ví dụ có phàn nàn/góp ý xây dựng (Label 1), ví dụ khen (Label 0), hay ví dụ chửi bới/xúc phạm không xây dựng (Label 0)?",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - PATTERN MATCHING: Comment có chứa từ khóa phàn nàn (chậm, lâu, thiếu, lỗi, không đúng, hơi...) không?",
+                question="Bước 3 - KIỂM TRA TÍNH XÂY DỰNG: Comment có thể hiện kỳ vọng chưa đáp ứng, mong muốn cải thiện, góp ý cụ thể không? (→ Label 1). Hay chỉ là chửi bới/xúc phạm chung chung không giúp cải thiện? (→ Label 0).",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - QUYẾT ĐỊNH: Dựa trên similarity với ví dụ. Label 1 = Có phàn nàn. Label 0 = Thuần khen ngợi.",
+                question="Bước 4 - QUYẾT ĐỊNH: Dựa trên similarity với ví dụ. Label 1 = Phàn nàn/góp ý MANG TÍNH XÂY DỰNG. Label 0 = Khen ngợi thuần túy HOẶC chửi bới/hate speech KHÔNG xây dựng.",
             ),
         ]
 
@@ -241,19 +241,19 @@ class ARQPromptBuilder:
         return [
             ARQQuery(
                 id=1,
-                question="Bước 1 - EDGE CASE: Kiểm tra các trường hợp khó: 'Khen nhưng có góp ý nhẹ' (Label 1) vs 'Khen thuần túy' (Label 0).",
+                question="Bước 1 - EDGE CASE: Kiểm tra các trường hợp khó: (a) 'Khen nhưng có góp ý nhẹ' → Label 1, (b) 'Khen thuần túy' → Label 0, (c) 'Chửi bới/xúc phạm không xây dựng' (VD: 'Game như L** đừng tải', 'ngu', 'rác') → Label 0.",
             ),
             ARQQuery(
                 id=2,
-                question=f"Bước 2 - AMBIGUOUS CHECK: Comment '{text}' có ẩn ý phàn nàn không? (VD: 'được', 'tạm', 'cũng ok' có thể là khen miễn cưỡng)",
+                question=f"Bước 2 - AMBIGUOUS CHECK: Comment '{text}' có ẩn ý phàn nàn không? (VD: 'được', 'tạm', 'cũng ok' có thể là khen miễn cưỡng). Phân biệt: phàn nàn xây dựng (kỳ vọng chưa đáp ứng) vs chửi bới/hate speech (không xây dựng).",
             ),
             ARQQuery(
                 id=3,
-                question="Bước 3 - DECISION: Nếu có BẤT KỲ dấu hiệu không hài lòng, góp ý, wish → Label 1. Chỉ thuần khen → Label 0.",
+                question="Bước 3 - DECISION: Label 1 = Phàn nàn/góp ý/wish MANG TÍNH XÂY DỰNG (kể cả mixed). Label 0 = Khen thuần túy HOẶC chửi bới/xúc phạm/hate speech KHÔNG xây dựng.",
             ),
             ARQQuery(
                 id=4,
-                question="Bước 4 - REASONING: Giải thích rõ tại sao chọn label, đặc biệt với các comment mixed hoặc ambiguous.",
+                question="Bước 4 - REASONING: Giải thích rõ tại sao chọn label. Nếu comment tiêu cực, giải thích nó xây dựng (→ Label 1) hay chỉ xúc phạm (→ Label 0).",
             ),
         ]
 
