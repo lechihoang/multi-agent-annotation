@@ -1,15 +1,4 @@
-"""ARQ Prompt Builder - MAFA-style Structured Reasoning Queries.
 
-Implements Attentive Reasoning Queries (ARQ) from MAFA paper Section 4.2.1.
-
-ARQ key points from paper:
-1. PROMPT: Structured queries guide LLM through systematic reasoning
-2. OUTPUT: JSON format with final_label, confidence, reasoning
-3. Goal: Mitigate "lost in middle" phenomenon
-4. Domain-specific queries tailored to task
-
-NO FALLBACK - All responses must be valid JSON.
-"""
 
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
@@ -38,14 +27,9 @@ class ARQPrompt:
 
 
 class ARQPromptBuilder:
-    """Builder for ARQ prompts optimized for classification tasks (Dynamic Labels).
-
-    NO FALLBACK - LLM must output valid JSON matching output_schema.
-    """
 
     @staticmethod
     def _get_labels() -> Dict[str, str]:
-        """Get labels dynamically from config."""
         config = get_config()
         if (
             hasattr(config, "task")
@@ -54,7 +38,6 @@ class ARQPromptBuilder:
         ):
             return config.task.labels
 
-        # Default fallback if config missing (should not happen in prod)
         return {
             "0": "Non-complaint - Khen ngợi thuần túy, hài lòng, tích cực.",
             "1": "Complaint - Phàn nàn, góp ý, không hài lòng về sản phẩm/dịch vụ/giao hàng.",
@@ -62,7 +45,6 @@ class ARQPromptBuilder:
 
     @staticmethod
     def _get_output_schema() -> Dict[str, Any]:
-        """Get output schema dynamically based on current labels."""
         labels = ARQPromptBuilder._get_labels()
         return {
             "type": "object",
@@ -91,7 +73,6 @@ class ARQPromptBuilder:
         context: Optional[str] = None,
         agent_type: str = "primary",
     ) -> ARQPrompt:
-        """Build ARQ prompt for classification task."""
         system_prompt = ARQPromptBuilder._build_system_prompt(text, context)
         reasoning_queries = ARQPromptBuilder._build_queries(agent_type, text, context)
         output_schema = ARQPromptBuilder._get_output_schema()
@@ -106,7 +87,6 @@ class ARQPromptBuilder:
 
     @staticmethod
     def _build_system_prompt(text: str, context: Optional[str]) -> str:
-        """Build system prompt with task description and examples."""
         config = get_config()
         task_desc = (
             config.task.description if hasattr(config, "task") else "Phân loại văn bản"
@@ -120,7 +100,6 @@ class ARQPromptBuilder:
             "LABELS:",
         ]
 
-        # Dynamic labels
         labels = ARQPromptBuilder._get_labels()
         for label, desc in labels.items():
             parts.append(f"  - {label}: {desc}")
@@ -154,7 +133,6 @@ class ARQPromptBuilder:
     def _build_queries(
         agent_type: str, text: str, context: Optional[str]
     ) -> List[ARQQuery]:
-        """Build reasoning queries based on agent type."""
         queries = {
             "primary": ARQPromptBuilder._primary_queries(text),
             "contextual": ARQPromptBuilder._contextual_queries(text, context),
@@ -165,7 +143,6 @@ class ARQPromptBuilder:
 
     @staticmethod
     def _primary_queries(text: str) -> List[ARQQuery]:
-        """Primary agent: direct analysis based on Olshtain & Weinbach definition."""
         labels = ARQPromptBuilder._get_labels()
         return [
             ARQQuery(
@@ -188,12 +165,6 @@ class ARQPromptBuilder:
 
     @staticmethod
     def _contextual_queries(text: str, context: Optional[str]) -> List[ARQQuery]:
-        """Critic agent (formerly Contextual): Devil's Advocate analysis based on Olshtain & Weinbach.
-
-        Focuses on verifying strictly against the definition constraints:
-        - Complaint (1) shows dissatisfaction, unmet expectation, suggestion, warning.
-        - Non-complaint (0) is PURE satisfaction/praise with NO complaints.
-        """
         return [
             ARQQuery(
                 id=1,
@@ -215,7 +186,6 @@ class ARQPromptBuilder:
 
     @staticmethod
     def _retrieval_queries(text: str) -> List[ARQQuery]:
-        """Retrieval agent: analysis with similar examples."""
         return [
             ARQQuery(
                 id=1,
@@ -237,7 +207,6 @@ class ARQPromptBuilder:
 
     @staticmethod
     def _hybrid_queries(text: str) -> List[ARQQuery]:
-        """Hybrid agent: analysis with edge cases and ambiguous patterns."""
         return [
             ARQQuery(
                 id=1,
@@ -259,19 +228,13 @@ class ARQPromptBuilder:
 
     @staticmethod
     def to_prompt(arq: ARQPrompt) -> str:
-        """Convert ARQ prompt to full prompt string for LLM.
-
-        NO FALLBACK - Output must be valid JSON.
-        """
         parts = [arq.system_prompt]
 
-        # Add examples if provided
         if arq.examples:
             parts.extend(["", "VÍ DỤ MINH HỌA:"])
             for i, ex in enumerate(arq.examples):
                 parts.append(f'  - "{ex["text"]}" → Label: {ex["label"]}')
 
-        # Add reasoning queries (to guide LLM, not to answer)
         parts.extend(
             [
                 "",
@@ -281,7 +244,6 @@ class ARQPromptBuilder:
         for q in arq.reasoning_queries:
             parts.append(f"  {q.question}")
 
-        # Add output format requirement
         schema_str = json.dumps(arq.output_schema, indent=2, ensure_ascii=False)
         parts.extend(
             [
@@ -305,19 +267,13 @@ class ARQPromptBuilder:
 
     @staticmethod
     def parse_response(response: str) -> Dict[str, Any]:
-        """Parse ARQ response - MUST be valid JSON.
-
-        NO FALLBACK - If response is not valid JSON, raise error.
-        """
         response = response.strip()
 
-        # Remove markdown code blocks if present
         if response.startswith("```json"):
             response = response[7:-3]
         elif response.startswith("```"):
             response = response[3:-3]
 
-        # MUST be valid JSON - NO FALLBACK
         try:
             data = json.loads(response)
         except json.JSONDecodeError as e:
@@ -325,7 +281,6 @@ class ARQPromptBuilder:
                 f"Invalid JSON response from LLM: {e}. Response: {response[:200]}"
             )
 
-        # Validate required fields
         if "final_label" not in data:
             raise ValueError(f"Missing 'final_label' in response: {data}")
         if "confidence" not in data:
@@ -333,20 +288,17 @@ class ARQPromptBuilder:
         if "reasoning" not in data:
             raise ValueError(f"Missing 'reasoning' in response: {data}")
 
-        # Validate label (Dynamic check)
         valid_labels = list(ARQPromptBuilder._get_labels().keys())
         if data["final_label"] not in valid_labels:
             raise ValueError(
                 f"Invalid label: {data['final_label']}. Expected one of {valid_labels}"
             )
 
-        # Validate confidence
         try:
             conf_val = float(data["confidence"])
             if not (0.0 <= conf_val <= 1.0):
                 raise ValueError(f"Confidence out of range: {conf_val}")
 
-            # Auto-assign level for backward compatibility
             if conf_val >= 0.8:
                 level = "HIGH"
             elif conf_val >= 0.5:
@@ -361,7 +313,6 @@ class ARQPromptBuilder:
                 "reasoning": data["reasoning"],
             }
         except ValueError:
-            # Fallback if model still returns text like "HIGH"
             score = ARQPromptBuilder.confidence_to_score(data["confidence"])
             return {
                 "final_label": data["final_label"],
@@ -372,7 +323,6 @@ class ARQPromptBuilder:
 
     @staticmethod
     def confidence_to_score(confidence: str) -> float:
-        """Convert confidence level to numeric score."""
         mapping = {
             "HIGH": 0.9,
             "MEDIUM": 0.7,

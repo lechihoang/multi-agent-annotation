@@ -1,4 +1,4 @@
-"""Few-shot example selection using Groq API."""
+
 
 from typing import List, Dict, Any, Set, Optional
 import threading
@@ -23,10 +23,6 @@ class FewShotExample:
 
 
 class FewShotSelector:
-    """Selects unique few-shot examples for MAFA agents using Groq API.
-
-    Each agent gets different examples to increase ensemble diversity.
-    """
 
     _lock = threading.Lock()
     _data_loaded = False
@@ -58,7 +54,6 @@ class FewShotSelector:
                 with open(self.training_data_path, "r", encoding="utf-8-sig") as f:
                     reader = csv.DictReader(f)
                     cols = reader.fieldnames or []
-                    # Flexible column matching (like RetrievalAgent)
                     text_col = next(
                         (c for c in cols if c.lower() in ["comment", "text", "content", "review"]),
                         None,
@@ -84,7 +79,6 @@ class FewShotSelector:
                     for row in reader:
                         comment = row.get(text_col, "").strip()
                         label_val = row.get(label_col, "").strip()
-                        # Normalize float labels like "0.0"/"1.0" to "0"/"1"
                         if label_val in ["0.0", "1.0"]:
                             label_val = label_val[0]
                         if comment and label_val in ["0", "1"]:
@@ -166,7 +160,6 @@ class FewShotSelector:
     async def _select_with_llm(
         self, query: str, agent: str, k: int, exclude: Set[str]
     ) -> List[FewShotExample]:
-        """Use LLM to intelligently select examples based on query."""
         if not self.llm_client:
             return self._select_fallback(agent, k, exclude)
 
@@ -260,7 +253,6 @@ Return ONLY JSON array:
     def select_diverse_for_all_agents(
         self, query: str, task_type: str = "toxicity", k_per_agent: int = 8
     ) -> Dict[str, List[FewShotExample]]:
-        """Select unique examples for all 4 agents (no overlap)."""
         agents = ["primary_only", "contextual", "retrieval", "retrieval_mrl"]
         result = {}
         used: Set[str] = set()

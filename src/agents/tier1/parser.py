@@ -1,4 +1,4 @@
-"""Tier 1: Task Parser - Parse prompt using LLM inference."""
+
 
 import csv
 import json
@@ -84,10 +84,6 @@ Example:
 Respond ONLY with JSON."""
 
     async def _call_llm(self, prompt: str) -> Dict[str, Any]:
-        """Call LLM to parse task definition.
-
-        NO FALLBACK - Raises exception on failure.
-        """
         if self.llm_client is None:
             raise RuntimeError("LLM client not configured")
 

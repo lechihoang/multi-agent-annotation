@@ -1,12 +1,4 @@
-#!/usr/bin/env python3
-"""ARQ Batch Runner - Sử dụng đúng ARQ agents với full output capture.
 
-Differences from run_batch.py:
-- Sử dụng ARQ agents thực sự (PrimaryOnlyAgent, ContextualAgent, etc.)
-- Capture đầy đủ reasoning từ mỗi agent
-- Lưu raw LLM responses để debug
-- NO FALLBACK - Validate JSON output
-"""
 
 import asyncio
 import csv
@@ -35,15 +27,13 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 
 
 class ARQBatchRunner:
-    """Batch runner sử dụng đúng ARQ agents."""
 
     def __init__(self, calls_per_minute: int = 40):
         self.config = get_config()
         self.delay = 60.0 / calls_per_minute
         self.last_call_time = 0
 
-        # Configure logger
-        logger.remove()  # Remove default handler
+        logger.remove()
         logger.add(
             sys.stderr,
             format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
@@ -55,7 +45,6 @@ class ARQBatchRunner:
         logger.info(f"Provider: {self.config.provider.type}")
         logger.info(f"{'=' * 60}")
 
-        # Initialize ARQ agents
         self.agents = {
             "primary": PrimaryOnlyAgent(),
             "contextual": ContextualAgent(),
@@ -77,7 +66,6 @@ class ARQBatchRunner:
         self.judge = JudgeAgent()
         self.review_queue = ReviewQueue()
 
-        # Storage for raw responses
         self.raw_responses: List[Dict] = []
 
     async def _rate_limit(self):
@@ -87,10 +75,8 @@ class ARQBatchRunner:
         self.last_call_time = time.time()
 
     def _build_prompt_for_agent(self, agent, text: str) -> str:
-        """Build prompt based on agent type."""
         agent_name = type(agent).__name__
 
-        # Get labels from config dynamically
         labels_config = getattr(self.config.task, "labels", None)
         if labels_config is None:
             raise ValueError("Task labels not configured in config.yaml")
@@ -103,14 +89,12 @@ class ARQBatchRunner:
             raise ValueError(f"Invalid format for task.labels: {type(labels_config)}")
 
         if "PrimaryOnlyAgent" in agent_name:
-            # PrimaryOnlyAgent: _build_prompt(text, labels, few_shot)
             return agent._build_prompt(
                 text=text,
                 labels=config_labels,
                 few_shot_examples=None,
             )
         elif "ContextualAgent" in agent_name:
-            # ContextualAgent: _build_prompt(text, title, labels, few_shot)
             return agent._build_prompt(
                 text=text,
                 title="",
@@ -118,8 +102,6 @@ class ARQBatchRunner:
                 few_shot_examples=None,
             )
         elif "RetrievalAgent" in agent_name or "RetrievalMrlAgent" in agent_name:
-            # Retrieval agents: _build_mafa_prompt(text, nearest, labels)
-            # Use empty nearest list for now (can be enhanced with actual retrieval)
             return agent._build_mafa_prompt(
                 text=text,
                 nearest=[],
@@ -129,7 +111,6 @@ class ARQBatchRunner:
             raise ValueError(f"Unknown agent type: {agent_name}")
 
     async def _tier1_batch(self, texts: List[str]) -> List[str]:
-        """Tier 1: Query expansion."""
         if self.query_expander:
             return [self.query_expander.expand(t) for t in texts]
 
@@ -156,13 +137,10 @@ class ARQBatchRunner:
         )
 
     async def _run_agent(self, text: str, agent_name: str, agent) -> Dict[str, Any]:
-        """Chạy một agent và capture đầy đủ output."""
         start_time = time.time()
 
-        # Build prompt based on agent type
         prompt = self._build_prompt_for_agent(agent, text)
 
-        # Call LLM
         await self._rate_limit()
 
         client = getattr(agent, "_llm_client", getattr(agent, "_groq", None))
@@ -173,7 +151,6 @@ class ARQBatchRunner:
         response = await client.chat([{"role": "user", "content": prompt}])
         raw_response = response.content
 
-        # Parse ARQ response
         parsed = agent._parse_response(raw_response)
 
         elapsed = time.time() - start_time
@@ -196,7 +173,6 @@ class ARQBatchRunner:
         n = len(texts)
         results = []
 
-        # ===== TIER 1 =====
         logger.info(f"  [Tier 1] Query expansion for {n} samples...")
         expanded = await self._tier1_batch(texts)
 
@@ -210,7 +186,6 @@ class ARQBatchRunner:
                 }
             )
 
-        # ===== TIER 2: 4 ARQ AGENTS =====
         logger.info(f"  [Tier 2] Running 4 ARQ agents...")
 
         batch_responses = {
@@ -224,7 +199,6 @@ class ARQBatchRunner:
             task_id = f"b{batch_num}_{i}"
             logger.debug(f'    Sample {i + 1}/{n}: "{text[:50]}..."')
 
-            # Log Tier 1 info to raw responses
             self.raw_responses.append(
                 {
                     "task_id": task_id,
@@ -236,7 +210,6 @@ class ARQBatchRunner:
                 }
             )
 
-            # Run all 4 agents in parallel for this text
             tasks = [
                 self._run_agent(text, name, agent)
                 for name, agent in self.agents.items()
@@ -254,7 +227,6 @@ class ARQBatchRunner:
                     }
                 )
 
-                # Store raw response for debugging (Tier 2)
                 self.raw_responses.append(
                     {
                         "task_id": task_id,
@@ -271,7 +243,6 @@ class ARQBatchRunner:
                     }
                 )
 
-        # Attach tier2 results to each sample
         for i, r in enumerate(results):
             r["tier2"] = {
                 "primary": batch_responses["primary"][i],
@@ -280,13 +251,11 @@ class ARQBatchRunner:
                 "hybrid": batch_responses["hybrid"][i],
             }
 
-        # ===== TIER 3 =====
         logger.info(f"  [Tier 3] Judge consensus...")
 
         for i, r in enumerate(results):
             tier2 = r["tier2"]
 
-            # Calculate weighted average confidence
             confs = [
                 tier2["primary"]["confidence"],
                 tier2["contextual"]["confidence"],
@@ -295,7 +264,6 @@ class ARQBatchRunner:
             ]
             avg_conf = sum(confs) / 4
 
-            # Judge decision (simplified)
             if avg_conf >= 0.85:
                 decision = "approve"
             elif avg_conf < 0.60:
@@ -303,7 +271,6 @@ class ARQBatchRunner:
             else:
                 decision = "review"
 
-            # Determine final label (majority vote)
             labels = [
                 tier2[a]["label"]
                 for a in ["primary", "contextual", "retrieval", "hybrid"]
@@ -320,7 +287,6 @@ class ARQBatchRunner:
                 "agent_agreement": dict(label_counts),
             }
 
-            # Log Tier 3 info to raw responses
             self.raw_responses.append(
                 {
                     "task_id": r["task_id"],
@@ -331,7 +297,6 @@ class ARQBatchRunner:
                 }
             )
 
-            # Tier 4: Review queue
             try:
                 self.review_queue.add(
                     task_id=r["task_id"],
@@ -356,10 +321,8 @@ async def run(
 ):
     runner = ARQBatchRunner(calls_per_minute)
 
-    # Output file path
     output_path = Path(output_file)
 
-    # Check existing progress to resume
     existing_count = 0
     if output_path.exists():
         try:
@@ -390,14 +353,12 @@ async def run(
             f"No existing output file found at {output_path.absolute()}. Starting new."
         )
 
-    # Load texts
     texts = []
     skipped = 0
     with open(input_file, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         cols = reader.fieldnames or []
 
-        # STRICT MODE: Use column from config ONLY
         config_col = getattr(runner.config.task.columns, "text", None)
         if config_col is None:
             raise ValueError(
@@ -416,7 +377,6 @@ async def run(
         text_col = config_col
 
         for row in reader:
-            # Skip processed samples
             if skipped < existing_count:
                 skipped += 1
                 continue
@@ -445,7 +405,6 @@ async def run(
         results = await runner.process_batch(batch, batch_num)
         all_results.extend(results)
 
-        # Save results to CSV (Simplified format)
         csv_file = str(Path(output_file).with_suffix(".csv"))
         csv_headers = ["text", "final_label", "confidence", "decision"]
 
@@ -484,7 +443,6 @@ async def run(
             )
             await asyncio.sleep(batch_delay)
 
-    # Summary
     print(f"\n{'=' * 60}")
     print("SUMMARY")
     print(f"{'=' * 60}")
@@ -497,61 +455,4 @@ async def run(
     print(f"Total: {total}")
     print(
         f"Approve:  {decisions['approve']} ({decisions['approve'] / total * 100:.1f}%)"
-    )
-    print(f"Review:   {decisions['review']} ({decisions['review'] / total * 100:.1f}%)")
-    print(
-        f"Escalate: {decisions['escalate']} ({decisions['escalate'] / total * 100:.1f}%)"
-    )
-
-    csv_out = str(Path(output_file).with_suffix(".csv"))
-    print(f"\nSaved (CSV): {csv_out}")
-    print(f"Saved (Debug Trace): {raw_output_file}")
-
-    # Time statistics
-    total_duration = time.time() - total_start_time
-    minutes = int(total_duration // 60)
-    seconds = int(total_duration % 60)
-
-    print(f"\n{'=' * 60}")
-    print(f"TIMING STATISTICS")
-    print(f"{'=' * 60}")
-    print(f"Total Processing Time: {minutes}m {seconds}s")
-
-    if total > 0:
-        avg_time = total_duration / total
-        print(f"Average Time per Sample: {avg_time:.2f}s")
-        print(f"Estimated Throughput: {60 / avg_time:.2f} samples/minute")
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", "-i", default="data/train.csv")
-    parser.add_argument(
-        "--output", "-o", default="data/batch_arq_results.csv"
-    )  # Default to CSV
-    parser.add_argument("--raw", "-R", default="data/debug_trace.json")
-    parser.add_argument("--batch-size", "-b", type=int, default=5)
-    parser.add_argument("--max", "-m", type=int, default=5)
-    parser.add_argument("--rate", "-r", type=int, default=40)
-    parser.add_argument(
-        "--batch-delay",
-        "-d",
-        type=int,
-        default=60,
-        help="Delay in seconds between batches to avoid rate limits",
-    )
-    args = parser.parse_args()
-
-    asyncio.run(
-        run(
-            args.input,
-            args.output,
-            args.raw,
-            args.batch_size,
-            args.max,
-            args.rate,
-            args.batch_delay,
-        )
     )

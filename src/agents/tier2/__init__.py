@@ -1,4 +1,3 @@
-# Tier 2 Agents
 from .primary_only import PrimaryOnlyAgent
 from .contextual import ContextualAgent
 from .retrieval import RetrievalAgent

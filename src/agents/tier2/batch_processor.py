@@ -1,7 +1,4 @@
-"""Batch Processing Module - Send 50 samples in 1 prompt.
 
-Efficient batch inference: 1 API call = 50 samples labeled.
-"""
 
 import json
 import asyncio
@@ -10,7 +7,6 @@ from datetime import datetime
 
 
 class BatchProcessor:
-    """Process multiple samples in a single API call."""
 
     def __init__(self, llm_client, batch_size: int = 50):
         """Initialize batch processor.
@@ -29,17 +25,8 @@ class BatchProcessor:
         is_toxicity: bool = True,
         few_shot_examples: Optional[List[Dict]] = None,
     ) -> str:
-        """Build batch prompt with all samples.
-
-        Args:
-            texts: List of texts to classify
-            labels: Classification labels
-            is_toxicity: True for toxicity (0/1), False for topic classification
-            few_shot_examples: Optional examples
-        """
         labels_str = ", ".join(labels)
 
-        # Build few-shot section
         examples_section = ""
         if few_shot_examples:
             examples_section = "\n\nVÍ DỤ MINH HỌA:\n"
@@ -75,18 +62,8 @@ DANH SÁCH CẦN PHÂN LOẠI:
     def _parse_batch_response(
         self, content: str, num_samples: int
     ) -> List[Dict[str, Any]]:
-        """Parse batch response from LLM.
-
-        Args:
-            content: Raw response from LLM
-            num_samples: Expected number of samples
-
-        Returns:
-            List of annotation results
-        """
         content = content.strip()
 
-        # Try to extract JSON array
         if content.startswith("```json"):
             content = content[7:-3]
         elif content.startswith("```"):
@@ -97,7 +74,6 @@ DANH SÁCH CẦN PHÂN LOẠI:
             if isinstance(data, list):
                 results = []
                 for item in data:
-                    # Handle both string and integer labels
                     label = str(item.get("label", "unknown"))
                     results.append(
                         {
@@ -112,11 +88,9 @@ DANH SÁCH CẦN PHÂN LOẠI:
         except (json.JSONDecodeError, TypeError, ValueError) as e:
             print(f"  [DEBUG] JSON parse error: {e}, trying regex...")
 
-        # Fallback: try regex to find labels
         import re
 
         results = []
-        # Look for patterns like "label": 1 or "label": "1"
         label_pattern = r'"index"\s*:\s*\d+.*?"label"\s*:\s*["\']?(\d+)["\']?'
         matches = re.findall(label_pattern, content, re.DOTALL)
 
@@ -146,24 +120,12 @@ DANH SÁCH CẦN PHÂN LOẠI:
         labels: List[str],
         few_shot_examples: Optional[List[Dict]] = None,
     ) -> List[Dict[str, Any]]:
-        """Annotate a batch of texts in a single API call.
-
-        Args:
-            texts: List of texts to classify
-            labels: Classification labels
-            few_shot_examples: Optional few-shot examples
-
-        Returns:
-            List of annotation results (label, confidence, reasoning)
-        """
         if not texts:
             return []
 
-        # Build prompt
         is_toxicity = set(labels) == {"0", "1"}
         prompt = self._build_batch_prompt(texts, labels, is_toxicity, few_shot_examples)
 
-        # Add each text with index
         for i, text in enumerate(texts):
             prompt += f'{i + 1}. "{text}"\n'
 
@@ -179,7 +141,6 @@ YÊU CẦU:
 
             results = self._parse_batch_response(response.content, len(texts))
 
-            # Ensure results have correct structure
             for i, result in enumerate(results):
                 if "label" not in result:
                     result["label"] = "unknown"
@@ -192,7 +153,6 @@ YÊU CẦU:
 
         except Exception as e:
             print(f"Batch annotation error: {e}")
-            # Return error results
             return [
                 {"label": "unknown", "confidence": 0.5, "reasoning": f"Error: {str(e)}"}
                 for _ in texts
@@ -205,24 +165,12 @@ async def process_batch(
     labels: List[str] = None,
     batch_size: int = 50,
 ) -> List[Dict[str, Any]]:
-    """Process texts in batches.
-
-    Args:
-        llm_client: LLM client
-        texts: All texts to process
-        labels: Classification labels (auto-detected if None)
-        batch_size: Samples per batch
-
-    Returns:
-        All annotation results
-    """
     if labels is None:
         labels = ["0", "1"]
 
     processor = BatchProcessor(llm_client, batch_size)
     all_results = []
 
-    # Process in batches
     for i in range(0, len(texts), batch_size):
         batch = texts[i : i + batch_size]
         batch_num = i // batch_size + 1

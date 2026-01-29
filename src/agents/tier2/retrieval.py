@@ -1,11 +1,4 @@
-"""Retrieval-based Annotation Agent - MAFA Tier 2 Agent 3.
 
-Agent C: Embedding-based retrieval with sentence-transformers and FAISS.
-Uses dense vector representations for similarity search, then LLM for final classification
-following MAFA's ARQ-style structured prompting with systematic reasoning steps.
-
-MAFA Section 4.2.1: ARQ prompts with retrieval-augmented reasoning.
-"""
 
 from typing import Dict, Any, List, Optional
 import threading
@@ -31,13 +24,6 @@ class RetrievalAnnotation:
 
 
 class RetrievalAgent:
-    """MAFA Agent 3: Embedding-Enhanced Ranker.
-
-    - Uses sentence-transformers for embeddings (all-MiniLM-L6-v2)
-    - FAISS for approximate nearest neighbor search
-    - LLM for final classification with structured ARQ-style prompting
-    - Weight: 0.25 in MAFA ensemble
-    """
 
     _lock = threading.Lock()
     _model_loaded = False
@@ -52,7 +38,6 @@ class RetrievalAgent:
         self._init_llm()
 
     def _init_llm(self):
-        """Initialize LLM client (Groq or NVIDIA) based on config."""
         try:
             self._llm_client = get_llm_client(self.config)
         except Exception as e:
@@ -60,7 +45,6 @@ class RetrievalAgent:
             self._llm_client = None
 
     def _ensure_loaded(self):
-        """Ensure model and index are loaded (thread-safe lazy loading)."""
         if RetrievalAgent._model_loaded and RetrievalAgent._faiss_index is not None:
             return
 
@@ -73,21 +57,17 @@ class RetrievalAgent:
                 import faiss
                 import numpy as np
 
-                # Load embedding model
                 self.embedding_model = SentenceTransformer(
                     self.config.huggingface.embedding_model
                 )
 
-                # Get topic examples (Might raise error if no seed data)
                 examples = self._get_topic_examples()
                 texts = [ex["text"] for ex in examples]
 
-                # Encode all examples
                 embeddings = self.embedding_model.encode(
                     texts, normalize_embeddings=True
                 )
 
-                # Create FAISS index (Inner Product for cosine similarity with normalized vectors)
                 dim = embeddings.shape[1]
                 index = faiss.IndexFlatIP(dim)
                 index.add(embeddings.astype("float32"))
@@ -107,15 +87,10 @@ class RetrievalAgent:
                 RetrievalAgent._faiss_index = None
 
     def _get_topic_examples(self) -> List[Dict]:
-        """Get labeled examples for retrieval.
-
-        Loads from 'seed_file' defined in config if available.
-        Otherwise falls back to empty list (should be handled by caller).
-        """
         seed_path = None
         if hasattr(self.config, "task") and hasattr(self.config.task, "paths"):
             seed_path = getattr(self.config.task.paths, "seed_file", None)
-        elif hasattr(self.config, "paths"):  # Fallback for flat config
+        elif hasattr(self.config, "paths"):
             seed_path = getattr(self.config.paths, "seed_file", None)
 
         if seed_path:
@@ -125,7 +100,6 @@ class RetrievalAgent:
 
                 path = Path(seed_path)
                 if not path.exists():
-                    # Try relative to project root if not absolute
                     root_dir = Path(__file__).parent.parent.parent.parent
                     path = root_dir / seed_path
 
@@ -133,7 +107,6 @@ class RetrievalAgent:
                     examples = []
                     with open(path, "r", encoding="utf-8-sig") as f:
                         reader = csv.DictReader(f)
-                        # Normalize column names (case insensitive)
                         cols = reader.fieldnames
                         text_col = next(
                             (
@@ -169,10 +142,8 @@ class RetrievalAgent:
                             )
             except Exception as e:
                 print(f"Error: Failed to load seed examples from {seed_path}: {e}")
-                # Re-raise to prevent silent failure if file is corrupt
                 raise
 
-        # NO FALLBACK - If we reach here, it means no seed path configured or file not found/empty
         if not seed_path:
             raise ValueError(
                 "Seed file path not configured in config.yaml (task.paths.seed_file)"
@@ -181,7 +152,6 @@ class RetrievalAgent:
         raise ValueError(f"No valid examples found in seed file: {seed_path}")
 
     def _retrieve(self, text: str, k: int = 5) -> List[Dict]:
-        """Retrieve most similar examples."""
         if (
             RetrievalAgent._faiss_index is None
             or RetrievalAgent._embedding_model is None
@@ -191,12 +161,10 @@ class RetrievalAgent:
         try:
             import numpy as np
 
-            # Encode query
             query_embedding = RetrievalAgent._embedding_model.encode(
                 [text], normalize_embeddings=True
             )
 
-            # Search FAISS
             distances, indices = RetrievalAgent._faiss_index.search(
                 query_embedding.astype("float32"), k
             )
@@ -204,7 +172,6 @@ class RetrievalAgent:
             nearest = []
             for i, idx in enumerate(indices[0]):
                 if 0 <= idx < len(RetrievalAgent._examples):
-                    # FAISS Inner Product with normalized vectors = cosine similarity
                     similarity = float(distances[0][i])
                     nearest.append(
                         {
@@ -222,14 +189,6 @@ class RetrievalAgent:
     def _build_mafa_prompt(
         self, text: str, nearest: List[Dict], labels: List[str]
     ) -> str:
-        """Build ARQ-style prompt with retrieval results.
-
-        MAFA Section 4.2.1: ARQ prompts with retrieval-augmented reasoning.
-        Output MUST be valid JSON (NO FALLBACK).
-
-        NOTE: This method ensures FAISS model is loaded before building prompt.
-        """
-        # Ensure FAISS model is loaded
         self._ensure_loaded()
 
         arq_prompt = ARQPromptBuilder.build_toxicity_arq(
@@ -238,10 +197,6 @@ class RetrievalAgent:
         return ARQPromptBuilder.to_prompt(arq_prompt)
 
     def _parse_response(self, content: str) -> Dict[str, Any]:
-        """Parse ARQ-style response from LLM.
-
-        NO FALLBACK - Response MUST be valid JSON.
-        """
         result = ARQPromptBuilder.parse_response(content)
 
         return {
@@ -255,11 +210,9 @@ class RetrievalAgent:
     async def annotate(
         self, text: str, labels: List[str] | None = None
     ) -> RetrievalAnnotation:
-        """Annotate text using MAFA pattern: retrieval + LLM classification."""
         if labels is None or len(labels) == 0:
             raise ValueError("Labels must be provided for RetrievalAgent")
 
-        # 1. Lazy load model
         self._ensure_loaded()
 
         if RetrievalAgent._faiss_index is None or self._llm_client is None:
@@ -267,20 +220,16 @@ class RetrievalAgent:
                 "RetrievalAgent not fully initialized (FAISS or LLM missing)"
             )
 
-        # 2. Retrieve similar examples
-        nearest = self._retrieve(text, k=3)  # Reduced to 3 for lower token usage
+        nearest = self._retrieve(text, k=3)
 
         if not nearest:
             raise ValueError("No similar examples found for retrieval")
 
-        # 3. Build MAFA-style prompt
         prompt = self._build_mafa_prompt(text, nearest, labels)
 
-        # 4. LLM makes classification decision
         response = await self._llm_client.chat([{"role": "user", "content": prompt}])
         result = self._parse_response(response.content)
 
-        # 5. Confidence is already numeric from ARQ parsing
         numeric_conf = result.get("confidence", 0.5)
 
         return RetrievalAnnotation(

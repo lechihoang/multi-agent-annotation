@@ -1,4 +1,4 @@
-"""Review Queue - Tier 4: Human-in-the-loop."""
+
 
 from dataclasses import dataclass, field
 from typing import List, Deque, Dict, Any
@@ -19,13 +19,6 @@ class ReviewItem:
 
 
 class ReviewQueue:
-    """Priority queue for human review.
-
-    Priority order:
-    1. Escalated cases (score <= 0.60)
-    2. Medium confidence (0.60 < score <= 0.85)
-    3. Spot-check (random sampling)
-    """
 
     PRIORITY_ESCALATED = 1
     PRIORITY_REVIEW = 2
@@ -45,7 +38,6 @@ class ReviewQueue:
         annotation: Dict[str, Any],
         consensus_score: float,
     ):
-        """Add item to appropriate queue."""
         decision = annotation.get("decision", "review")
         priority = self._get_priority(decision, consensus_score)
 
@@ -67,7 +59,6 @@ class ReviewQueue:
             self._review_count += 1
 
     def _get_priority(self, decision: str, score: float) -> int:
-        """Get priority level for item."""
         if decision == "escalate" or score <= 0.60:
             return self.PRIORITY_ESCALATED
         elif decision == "review" or score <= 0.85:
@@ -75,7 +66,6 @@ class ReviewQueue:
         return self.PRIORITY_SPOT_CHECK
 
     def get_next(self) -> ReviewItem | None:
-        """Get next item for review (priority-based)."""
         if not self.queue:
             return None
         return heapq.heappop(self.queue)
@@ -85,7 +75,6 @@ class ReviewQueue:
         return len(self.queue)
 
     def get_stats(self) -> Dict[str, int]:
-        """Get queue statistics."""
         return {
             "total": len(self.queue),
             "escalated": self._escalated_count,
@@ -93,10 +82,6 @@ class ReviewQueue:
             "spot_check": self._approved_count,
         }
 
-
-# =====================================================================
-# Review Workflow - Tier 4: Human-in-the-loop
-# =====================================================================
 
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
@@ -113,13 +98,11 @@ class ReviewDecision:
 
 
 class ReviewWorkflow:
-    """Review workflow management."""
 
     def __init__(self):
         self.history: list[ReviewDecision] = []
 
     def approve_auto(self, task_id: str, annotation: Dict[str, Any]) -> ReviewDecision:
-        """Record auto-approval for high confidence."""
         decision = ReviewDecision(
             task_id=task_id,
             decision="auto_approved",
@@ -137,7 +120,6 @@ class ReviewWorkflow:
         corrected_annotation: Dict[str, Any] | None = None,
         reviewer_notes: str | None = None,
     ) -> ReviewDecision:
-        """Submit human review decision."""
         review = ReviewDecision(
             task_id=task_id,
             decision=decision,
@@ -149,11 +131,9 @@ class ReviewWorkflow:
         return review
 
     def get_review_history(self, task_id: str) -> list[ReviewDecision]:
-        """Get review history for a task."""
         return [r for r in self.history if r.task_id == task_id]
 
     def get_stats(self) -> Dict[str, int]:
-        """Get workflow statistics."""
         stats = {
             "auto_approved": 0,
             "human_approved": 0,

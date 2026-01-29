@@ -1,15 +1,4 @@
-"""MAFA Pipeline - Continuous Processing Loop.
 
-Full MAFA pipeline with continuous processing:
-1. Process texts in batch
-2. Record metrics for each annotation
-3. Periodically update weights based on accuracy
-4. Human review integration
-5. Auto-save state
-
-Usage:
-    python -m src.run_pipeline --continuous --interval 60
-"""
 
 import asyncio
 import argparse
@@ -26,7 +15,6 @@ from .config import get_config
 
 
 class MAFALoop:
-    """Continuous MAFA processing loop with monitoring."""
 
     def __init__(
         self,
@@ -34,7 +22,7 @@ class MAFALoop:
         output_file: str = str(DATA_DIR / "annotations.json"),
         ground_truth_file: Optional[str] = None,
         batch_size: int = 50,
-        weight_update_interval: int = 10,  # Update weights every N batches
+        weight_update_interval: int = 10,
         auto_review: bool = False,
     ):
         """Initialize the MAFA processing loop.
@@ -58,11 +46,9 @@ class MAFALoop:
         self.annotations: List[Dict] = []
         self.ground_truth_map: Dict[str, str] = {}
 
-        # Load ground truth if available
         if ground_truth_file and os.path.exists(ground_truth_file):
             self._load_ground_truth()
 
-        # Statistics
         self.stats = {
             "total_processed": 0,
             "auto_approved": 0,
@@ -73,7 +59,6 @@ class MAFALoop:
         }
 
     def _load_ground_truth(self):
-        """Load ground truth labels from file."""
         try:
             with open(self.ground_truth_file, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -87,7 +72,6 @@ class MAFALoop:
             print(f"Warning: Could not load ground truth: {e}")
 
     def _load_texts(self) -> List[Dict]:
-        """Load texts from input file."""
         texts = []
         try:
             with open(self.input_file, "r", encoding="utf-8-sig") as f:
@@ -106,14 +90,12 @@ class MAFALoop:
         return texts
 
     def _apply_ground_truth(self, annotation: Dict):
-        """Apply ground truth to annotation and update metrics."""
         task_id = annotation.get("task_id")
         true_label = self.ground_truth_map.get(task_id)
 
         if true_label and self.pipeline.metrics_collector:
             self.pipeline.apply_ground_truth(task_id, true_label)
 
-            # Check if prediction was correct
             predicted = annotation.get("label")
             is_correct = predicted == true_label
             print(
@@ -121,7 +103,6 @@ class MAFALoop:
             )
 
     async def run_batch(self, texts: List[Dict]) -> List[Dict]:
-        """Process a single batch of texts."""
         results = []
         for item in texts:
             try:
@@ -129,7 +110,6 @@ class MAFALoop:
                 result["task_id"] = item.get("id", f"task_{len(results)}")
                 result["original_text"] = item["text"]
 
-                # Apply ground truth if available
                 self._apply_ground_truth(result)
 
                 results.append(result)
@@ -148,14 +128,8 @@ class MAFALoop:
         return results
 
     async def run_continuous(self, max_batches: int = 1000):
-        """Run continuous processing loop.
-
-        Args:
-            max_batches: Maximum number of batches to process (0 = infinite)
-        """
         self.stats["start_time"] = datetime.now()
 
-        # Load all texts
         all_texts = self._load_texts()
         if not all_texts:
             print("No texts to process!")
@@ -172,7 +146,6 @@ class MAFALoop:
         print(f"\nStarting at {self.stats['start_time'].isoformat()}")
         print("=" * 70)
 
-        # Start weight scheduler
         self.pipeline.start_weight_scheduler()
 
         batch_num = 0
@@ -183,20 +156,16 @@ class MAFALoop:
                 batch_num += 1
                 self.stats["total_batches"] = batch_num
 
-                # Get batch
                 batch = all_texts[text_idx : text_idx + self.batch_size]
                 text_idx += self.batch_size
 
                 print(f"\n[Batch {batch_num}] Processing {len(batch)} texts...")
 
-                # Process batch
                 results = await self.run_batch(batch)
                 self.annotations.extend(results)
 
-                # Save state
                 self._save_state()
 
-                # Print batch stats
                 stats = self.pipeline.get_component_stats()
                 if stats.get("monitoring"):
                     mon = stats["monitoring"]
@@ -204,7 +173,6 @@ class MAFALoop:
                         f"  -> Total: {mon['total_annotations']}, Accuracy: {mon['system_accuracy']:.1%}"
                     )
 
-                # Periodic weight update
                 if batch_num % self.weight_update_interval == 0:
                     print(f"\n{'=' * 50}")
                     print(f"[Weight Update - Batch {batch_num}]")
@@ -213,7 +181,6 @@ class MAFALoop:
                     new_weights = self.pipeline.update_weights()
                     self.stats["weight_updates"] += 1
 
-                    # Show agent performance
                     if stats.get("monitoring"):
                         for agent, weight in sorted(new_weights.items()):
                             perf = (
@@ -224,32 +191,25 @@ class MAFALoop:
                             acc = perf.get("accuracy", "N/A")
                             print(f"  {agent}: {weight:.4f} (accuracy: {acc})")
 
-                # Check max batches
                 if max_batches > 0 and batch_num >= max_batches:
                     print(f"\nReached max batches ({max_batches})")
                     break
 
-                # Small delay between batches
                 await asyncio.sleep(0.5)
 
         except KeyboardInterrupt:
             print("\n\nInterrupted by user")
 
         finally:
-            # Stop scheduler
             self.pipeline.stop_weight_scheduler()
 
-            # Final stats
             self._print_final_stats()
 
     def _save_state(self):
-        """Save current state to disk."""
         try:
-            # Save annotations
             with open(self.output_file, "w", encoding="utf-8") as f:
                 json.dump(self.annotations, f, ensure_ascii=False, indent=2)
 
-            # Export metrics
             if self.pipeline.metrics_collector:
                 self.pipeline.metrics_collector.export_metrics()
 
@@ -257,7 +217,6 @@ class MAFALoop:
             print(f"Warning: Failed to save state: {e}")
 
     def _print_final_stats(self):
-        """Print final statistics."""
         end_time = datetime.now()
         duration = end_time - self.stats["start_time"]
 
@@ -271,7 +230,6 @@ class MAFALoop:
         print(f"Human review: {self.stats['human_review']}")
         print(f"Weight updates: {self.stats['weight_updates']}")
 
-        # Final metrics
         stats = self.pipeline.get_component_stats()
         if stats.get("monitoring"):
             mon = stats["monitoring"]
@@ -287,7 +245,6 @@ class MAFALoop:
 
 
 async def main():
-    """Main entry point for continuous processing."""
     parser = argparse.ArgumentParser(description="MAFA Continuous Processing Loop")
     parser.add_argument(
         "--input", "-i", default=str(DATA_DIR / "train.csv"), help="Input CSV file"

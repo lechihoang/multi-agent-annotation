@@ -1,7 +1,4 @@
-"""MAFA Configuration - YAML-based with environment overrides.
 
-All settings are in config.yaml. Environment variables can override.
-"""
 
 import os
 from dataclasses import dataclass, field
@@ -9,7 +6,6 @@ from typing import List, Dict, Any, Optional
 
 
 def _load_yaml_config(config_path: str = "config.yaml") -> Dict[str, Any]:
-    """Load configuration from YAML file."""
     import yaml
 
     if not os.path.exists(config_path):
@@ -24,8 +20,6 @@ def _load_yaml_config(config_path: str = "config.yaml") -> Dict[str, Any]:
 
 
 def _get_env_override(key: str, default: Any = None) -> Any:
-    """Get value from environment variable, with prefix."""
-    # Try MAFA_ prefix first
     env_key = f"MAFA_{key.upper()}"
     value = os.getenv(env_key)
     if value is not None:
@@ -34,7 +28,6 @@ def _get_env_override(key: str, default: Any = None) -> Any:
 
 
 def _parse_list(value: str) -> List[str]:
-    """Parse comma-separated string to list."""
     if isinstance(value, list):
         return value
     if isinstance(value, str):
@@ -44,7 +37,6 @@ def _parse_list(value: str) -> List[str]:
 
 @dataclass
 class NvidiaConfig:
-    """NVIDIA NIM API configuration."""
 
     api_key: str = ""
     model: str = "llama-3.1-8b-instant"
@@ -132,7 +124,7 @@ class NvidiaConfig:
     """NVIDIA NIM API configuration (loaded from config.yaml)."""
 
     api_key: str = ""
-    model: str = ""  # Loaded from config.yaml
+    model: str = ""
     base_url: str = ""
     temperature: float = 0.1
     max_tokens: int = 512
@@ -143,12 +135,11 @@ class NvidiaConfig:
 class ProviderConfig:
     """LLM provider configuration (NVIDIA)."""
 
-    type: str = "nvidia"  # Default to nvidia
+    type: str = "nvidia"
 
 
 @dataclass
 class Config:
-    """Main configuration container."""
 
     provider: ProviderConfig
     nvidia: NvidiaConfig
@@ -163,16 +154,12 @@ class Config:
 
 
 def load_config(config_path: str = "config.yaml") -> Config:
-    """Load configuration from YAML with environment overrides."""
     yaml_config = _load_yaml_config(config_path)
 
-    # Helper to get with env override
     def get(path: str, default: Any = None) -> Any:
-        # Check env override
         env_value = _get_env_override(path)
         if env_value is not None:
             return env_value
-        # Navigate YAML config
         keys = path.split(".")
         value = yaml_config
         for key in keys:
@@ -182,7 +169,6 @@ def load_config(config_path: str = "config.yaml") -> Config:
                 return default
         return value if value is not None else default
 
-    # Helper to get nested config
     def get_section(path: str, default: Dict = {}) -> Dict:
         keys = path.split(".")
         value = yaml_config
@@ -201,7 +187,7 @@ def load_config(config_path: str = "config.yaml") -> Config:
             api_key=get("nvidia.api_key", "")
             or os.getenv("NVIDIA_API_KEY", "")
             or os.getenv("NIM_API_KEY", ""),
-            model=get("nvidia.model", ""),  # Must be set in config.yaml
+            model=get("nvidia.model", ""),
             base_url=get("nvidia.base_url", ""),
             temperature=float(get("nvidia.temperature", 0.1)),
             max_tokens=int(get("nvidia.max_tokens", 512)),
@@ -267,7 +253,6 @@ _config: Optional[Config] = None
 
 
 def get_config(config_path: str = "config.yaml") -> Config:
-    """Get or create config singleton."""
     global _config
     if _config is None:
         _config = load_config(config_path)
@@ -275,17 +260,11 @@ def get_config(config_path: str = "config.yaml") -> Config:
 
 
 def reset_config():
-    """Reset config (for testing)."""
     global _config
     _config = None
 
 
 def get_llm_client(config: Config = None):
-    """Get LLM client based on provider configuration.
-
-    Returns:
-        NimClient instance, or None if not available
-    """
     if config is None:
         config = get_config()
 

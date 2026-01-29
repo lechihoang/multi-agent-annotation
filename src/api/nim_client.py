@@ -1,18 +1,10 @@
-"""NVIDIA NIM API client for LLM inference.
 
-NIM (NVIDIA Inference Microservice) provides access to NVIDIA-hosted models
-via OpenAI-compatible API format.
-
-Usage:
-    - Set NVIDIA_API_KEY environment variable or NIM_API_KEY
-    - Configure model in config.yaml
-"""
 
 import os
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
-# Load environment variables from .env file
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,7 +24,6 @@ class ChatResponse:
 
 
 class NimClient:
-    """Client for NVIDIA NIM API - OpenAI-compatible format."""
 
     def __init__(
         self,
@@ -54,7 +45,6 @@ class NimClient:
         try:
             from openai import OpenAI as OpenAILib
 
-            # Get API key from env or parameter
             self._api_key = (
                 api_key or os.getenv("NIM_API_KEY") or os.getenv("NVIDIA_API_KEY")
             )
@@ -63,17 +53,14 @@ class NimClient:
                     "NIM_API_KEY or NVIDIA_API_KEY environment variable is required"
                 )
 
-            # Load model from config.yaml if not provided
             if model is None:
                 from src.config import get_config
                 config = get_config()
                 model = config.nvidia.model
 
-            # Set base URL
             if base_url:
                 self.base_url = base_url
             else:
-                # Auto-detect base URL based on model
                 self.base_url = self._get_base_url(model)
 
             self.client = OpenAILib(
@@ -90,22 +77,16 @@ class NimClient:
         self.max_tokens = max_tokens
 
     def _get_base_url(self, model: str) -> str:
-        """Get base URL for NIM API based on model name."""
-        # Check env override first
         env_url = os.getenv("NIM_BASE_URL")
         if env_url:
             return env_url
 
-        # NVIDIA NIM uses integrate.api.nvidia.com/v1 format
-        # Model is passed in the request body, not URL
         return "https://integrate.api.nvidia.com/v1"
 
     async def chat(self, messages: List[Dict[str, str]]) -> ChatResponse:
-        """Send chat completion request to NIM API."""
         import httpx
         import asyncio
 
-        # Prepare headers
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -118,8 +99,8 @@ class NimClient:
             "max_tokens": self.max_tokens,
         }
 
-        max_retries = 10  # Increased for batch processing stability
-        retry_delay = 30  # Increased base delay
+        max_retries = 10
+        retry_delay = 30
 
         async with httpx.AsyncClient(timeout=120.0) as http_client:
             data = None
@@ -135,11 +116,9 @@ class NimClient:
                     if response.status_code == 429:
                         retry_after = response.headers.get("Retry-After")
                         if retry_after:
-                            wait_time = int(retry_after) + 5  # Add 5s buffer
+                            wait_time = int(retry_after) + 5
                         else:
-                            # Exponential backoff with higher base: 30, 60, 120, ...
                             wait_time = retry_delay * (2**attempt)
-                            # Cap wait time at 5 minutes
                             wait_time = min(wait_time, 300)
 
                         print(
@@ -151,11 +130,9 @@ class NimClient:
                     response.raise_for_status()
                     data = response.json()
 
-                    # Success - break retry loop
                     break
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 429:
-                        # Should have been handled above, but just in case
                         print(f"  [429] HTTPStatusError caught. Retrying...")
                         await asyncio.sleep(30)
                         continue
@@ -166,7 +143,6 @@ class NimClient:
                     continue
 
             else:
-                # If loop finishes without success
                 if response:
                     response.raise_for_status()
                 else:
@@ -180,7 +156,6 @@ class NimClient:
         choice = data["choices"][0]
         message = choice["message"]
 
-        # Handle DeepSeek R1 format (reasoning_content + content)
         content = message.get("content", "")
         if not content and message.get("reasoning_content"):
             content = message.get("reasoning_content", "")
@@ -194,7 +169,6 @@ class NimClient:
     async def structured(
         self, messages: List[Dict[str, str]], schema: Dict[str, Any]
     ) -> ChatResponse:
-        """Send structured output request with JSON schema."""
         import httpx
 
         headers = {
@@ -225,7 +199,6 @@ class NimClient:
         choice = data["choices"][0]
         message = choice["message"]
 
-        # Handle DeepSeek R1 format (reasoning_content + content)
         content = message.get("content", "")
         if not content and message.get("reasoning_content"):
             content = message.get("reasoning_content", "")
@@ -237,7 +210,6 @@ class NimClient:
         )
 
     def is_available(self) -> bool:
-        """Check if NIM API is available."""
         import httpx
 
         try:
@@ -262,16 +234,11 @@ class NimClient:
             return False
 
 
-# Factory function to get the appropriate client
 def get_nim_client(
     model: Optional[str] = None,
     temperature: float = 0.1,
     max_tokens: int = 512,
 ) -> Optional[NimClient]:
-    """Create and return NIM client if API key is available.
-
-    Model is loaded from config.yaml if not provided.
-    """
     api_key = os.getenv("NIM_API_KEY") or os.getenv("NVIDIA_API_KEY")
     if not api_key:
         return None

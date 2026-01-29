@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#!/usr/bin/env python3
 """Tier 4: Human Review CLI.
 
 Review annotations that need human confirmation (confidence: 0.60-0.85).
@@ -124,15 +123,12 @@ def review_all(results: list, input_file: str) -> list:
         else:
             skipped.append(item)
 
-    # Update original results
     for r in reviewed:
-        # Find and replace in original list
         for j, orig in enumerate(results):
             if orig.get("task_id") == r.get("task_id"):
                 results[j] = r
                 break
 
-    # Report
     print(f"\n{'=' * 70}")
     print("REVIEW SUMMARY")
     print(f"{'=' * 70}")
@@ -150,7 +146,6 @@ def approve_all(results: list) -> list:
         item["review_action"] = "bulk_approve"
         item["reviewed_at"] = datetime.now().isoformat()
 
-        # Update tier3 decision
         if "tier3" not in item:
             item["tier3"] = {}
         item["tier3"]["decision"] = "approve"
@@ -165,19 +160,16 @@ def auto_decide(results: list) -> list:
         tier2 = item.get("tier2", {})
 
         if isinstance(tier2, dict):
-            # Collect labels from all agents
             labels = []
             for pred in tier2.values():
                 if isinstance(pred, dict) and "label" in pred:
                     labels.append(pred["label"])
 
             if labels:
-                # Majority vote
                 from collections import Counter
 
                 vote = Counter(labels).most_common(1)[0][0]
 
-                # Update tier3
                 if "tier3" not in item:
                     item["tier3"] = {}
                 item["tier3"]["label"] = vote
@@ -241,16 +233,13 @@ def main():
         print(f"Error: File not found: {input_file}")
         return
 
-    # Load results
     results = load_results(str(input_file))
     print(f"Loaded {len(results)} results from {input_file}")
 
-    # Stats only
     if args.stats:
         show_stats(results)
         return
 
-    # Auto-decide
     if args.auto:
         results = auto_decide(results)
         output_file = args.output or str(input_file)
@@ -259,7 +248,6 @@ def main():
         print(f"Saved to {output_file}")
         return
 
-    # Approve all
     if args.approve_all:
         results = approve_all(results)
         output_file = args.output or str(input_file)
@@ -268,7 +256,6 @@ def main():
         print(f"Saved to {output_file}")
         return
 
-    # Interactive review
     results = review_all(results, str(input_file))
     output_file = args.output or str(input_file)
 

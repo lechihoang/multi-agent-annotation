@@ -1,15 +1,4 @@
-"""Judge Agent - Tier 3: MAFA Consensus and Quality Control.
 
-Implements MAFA Section 4.5: Judge Agent and Consensus Mechanism
-- Combines outputs from 4 Tier 2 agents
-- Uses DYNAMIC weights from MetricsCollector (updated daily)
-- Weighted voting with confidence calibration
-- NO FALLBACK - All or nothing
-
-Algorithm (Paper MAFA Section 4.5):
-    weight[i] = accuracy[i] / Σ(accuracy[j])  # Daily updated
-    Final_Score(candidate) = Σ(weight[i] × confidence[i] × score[i][candidate])
-"""
 
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
@@ -39,19 +28,7 @@ class FinalAnnotation:
 
 
 class JudgeAgent:
-    """MAFA Tier 3: Judge Agent for consensus and quality control.
 
-    Uses DYNAMIC weights from MetricsCollector (not static 0.25).
-    Weights updated daily based on historical accuracy.
-
-    Combines outputs from 4 Tier 2 agents:
-    - PrimaryOnly Agent
-    - Contextual Agent
-    - Retrieval Agent
-    - RetrievalMRL Agent
-    """
-
-    # Default weights (used when no metrics available)
     DEFAULT_WEIGHTS = {
         "primary_only": 0.25,
         "contextual": 0.25,
@@ -71,14 +48,6 @@ class JudgeAgent:
         self._metrics_collector = metrics_collector
 
     def _get_dynamic_weights(self) -> Dict[str, float]:
-        """Get dynamic weights from metrics or use defaults.
-
-        MAFA Section 4.5: "Weights are updated daily using a rolling
-        window of accuracy measurements"
-
-        Returns:
-            Dict of agent_name -> weight
-        """
         if self._metrics_collector is None:
             return self.DEFAULT_WEIGHTS.copy()
 
@@ -88,18 +57,15 @@ class JudgeAgent:
             return self.DEFAULT_WEIGHTS.copy()
 
     def set_metrics_collector(self, metrics_collector):
-        """Set or update metrics collector for dynamic weights."""
         self._metrics_collector = metrics_collector
 
     def _get_thresholds(self):
-        """Get consensus thresholds from config."""
         consensus_config = getattr(self.config.task, "consensus", None)
         if consensus_config:
             return {
                 "approve": getattr(consensus_config, "approve_threshold", 0.85),
                 "escalate": getattr(consensus_config, "escalate_threshold", 0.60),
             }
-        # Default fallback only if config missing (should not happen with proper setup)
         return {"approve": 0.85, "escalate": 0.60}
 
     async def evaluate(
@@ -111,30 +77,13 @@ class JudgeAgent:
         retrieval_result: Dict[str, Any],
         retrieval_mrl_result: Dict[str, Any],
     ) -> FinalAnnotation:
-        """Evaluate all agent results with DYNAMIC weights.
-
-        Algorithm:
-            weights = get_dynamic_weights()  # From MetricsCollector
-            annotations = [
-                Annotation(weight=weights["primary_only"], ...),
-                Annotation(weight=weights["contextual"], ...),
-                Annotation(weight=weights["retrieval"], ...),
-                Annotation(weight=weights["retrieval_mrl"], ...),
-            ]
-            consensus = engine.calculate(annotations, task_type)
-
-        NO FALLBACK - Raises exception on failure.
-        """
-        # Get dynamic weights from MetricsCollector
         weights = self._get_dynamic_weights()
 
-        # Convert confidence to MAFA levels
         conf_primary = primary_only_result.get("confidence", 0.5)
         conf_contextual = contextual_result.get("confidence", 0.5)
         conf_retrieval = retrieval_result.get("confidence", 0.5)
         conf_retrieval_mrl = retrieval_mrl_result.get("confidence", 0.5)
 
-        # Build annotations with DYNAMIC weights
         annotations = [
             Annotation(
                 agent_name="primary_only",
@@ -176,7 +125,6 @@ class JudgeAgent:
 
         consensus = self.engine.calculate(annotations, task_type)
 
-        # Override decision based on configurable thresholds
         thresholds = self._get_thresholds()
         if consensus.score >= thresholds["approve"]:
             consensus.decision = "approve"
@@ -185,7 +133,6 @@ class JudgeAgent:
         else:
             consensus.decision = "review"
 
-        # Get final label
         if task_type in ["ner", "topic"]:
             final_label = consensus.final_label
             final_entities = []
@@ -193,10 +140,8 @@ class JudgeAgent:
             final_label = consensus.final_label
             final_entities = []
 
-        # Overall confidence level
         overall_level = convert_confidence_to_level(consensus.score)
 
-        # Audit trail with weight info
         audit_trail = consensus.audit_trail.copy()
         audit_trail["used_dynamic_weights"] = self._metrics_collector is not None
         audit_trail["weights_used"] = {a.agent_name: a.weight for a in annotations}
@@ -215,23 +160,18 @@ class JudgeAgent:
         )
 
     def should_escalate(self, annotation: FinalAnnotation) -> bool:
-        """Check if annotation should be escalated to expert."""
         return annotation.decision == "escalate"
 
     def should_review(self, annotation: FinalAnnotation) -> bool:
-        """Check if annotation requires human review."""
         return annotation.decision == "review"
 
     def should_approve(self, annotation: FinalAnnotation) -> bool:
-        """Check if annotation can be auto-approved."""
         return annotation.decision == "approve"
 
     def get_confidence_distribution(
         self, annotation: FinalAnnotation
     ) -> Dict[str, int]:
-        """Get distribution of HIGH/MEDIUM/LOW confidence from audit trail."""
         return annotation.audit_trail.get("confidence_distribution", {})
 
     def get_agreement_rate(self, annotation: FinalAnnotation) -> float:
-        """Get agent agreement rate."""
         return annotation.audit_trail.get("agreement_rate", 0.0)

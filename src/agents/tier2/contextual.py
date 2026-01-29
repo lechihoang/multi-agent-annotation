@@ -1,10 +1,4 @@
-"""Contextual Agent - MAFA Tier 2 Agent 2.
 
-Agent B: Full-Context analysis using ARQ-style structured prompting.
-Incorporates secondary information (Title, metadata) for deeper understanding.
-
-MAFA Section 4.2.1: ARQ prompts with domain-specific queries for contextual analysis.
-"""
 
 from typing import Dict, Any, List, Optional
 import json
@@ -34,13 +28,6 @@ class ContextualAnnotation:
 
 
 class ContextualAgent:
-    """MAFA Agent 2: Full-Context Ranker.
-
-    - Uses structured prompting with secondary context (Title)
-    - Enables deeper semantic understanding
-    - Better for queries requiring contextual interpretation
-    - Weight: 0.25 in MAFA ensemble
-    """
 
     def __init__(self):
         self.config = get_config()
@@ -49,7 +36,6 @@ class ContextualAgent:
         self._init_llm()
 
     def _init_llm(self):
-        """Initialize LLM client based on provider configuration."""
         self._llm_client = get_llm_client(self.config)
         if self._llm_client is None:
             print("Warning: No LLM client available (neither Groq nor NIM)")
@@ -61,11 +47,6 @@ class ContextualAgent:
         labels: List[str],
         few_shot_examples: Optional[List[Dict[str, str]]] = None,
     ) -> str:
-        """Build ARQ-style structured prompt with contextual analysis.
-
-        MAFA Section 4.2.1: ARQ prompts with title/context analysis.
-        Output MUST be valid JSON (NO FALLBACK).
-        """
         arq_prompt = ARQPromptBuilder.build_toxicity_arq(
             text=text,
             examples=few_shot_examples or [],
@@ -75,10 +56,6 @@ class ContextualAgent:
         return ARQPromptBuilder.to_prompt(arq_prompt)
 
     def _parse_response(self, content: str) -> Dict[str, Any]:
-        """Parse ARQ-style response from LLM.
-
-        NO FALLBACK - Response MUST be valid JSON.
-        """
         result = ARQPromptBuilder.parse_response(content)
 
         return {
@@ -96,14 +73,6 @@ class ContextualAgent:
         labels: List[str] | None = None,
         few_shot_examples: Optional[List[Dict[str, str]]] = None,
     ) -> ContextualAnnotation:
-        """Annotate text using contextual analysis with few-shot examples.
-
-        Args:
-            text: Text to classify
-            title: Title/context for the text
-            labels: Classification labels
-            few_shot_examples: Optional few-shot examples from FewShotSelector
-        """
         if labels is None or len(labels) == 0:
             raise ValueError("Labels must be provided for ContextualAgent")
 
@@ -132,5 +101,4 @@ class ContextualAgent:
         return self.weight
 
     def unload(self):
-        """Unload client (no-op for cloud API)."""
         self._llm_client = None

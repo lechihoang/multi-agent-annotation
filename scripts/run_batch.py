@@ -1,11 +1,4 @@
-"""Optimized MAFA - 4 agents × batch processing.
 
-API calls for 20 samples:
-- Tier 1: 1 call (batch 20)
-- Tier 2: 4 calls (4 agents × batch 20)
-- Tier 3: 1 call (batch consensus)
-Total: 6 calls (vs 120 calls original)
-"""
 
 import asyncio
 import csv
@@ -57,10 +50,8 @@ class BatchMAFA:
         self.last_call_time = time.time()
 
     def _parse(self, content: str, n: int) -> List[Dict]:
-        """Parse JSON from model response. Handles Vietnamese text + JSON format."""
         import re
 
-        # Find JSON array - look for ```json or just [
         json_start = content.find("```json")
         if json_start == -1:
             json_start = content.find("```")
@@ -69,7 +60,6 @@ class BatchMAFA:
 
         if json_start != -1:
             json_content = content[json_start:]
-            # Remove markdown code block
             if json_content.startswith("```"):
                 lines = json_content.split("\n")
                 if len(lines) > 2:
@@ -98,7 +88,6 @@ class BatchMAFA:
             except json.JSONDecodeError:
                 pass
 
-        # Fallback: regex extract labels and confidence
         labels = re.findall(r'["\']?label["\']?\s*:\s*["\']?(\d+)["\']?', content)
         confs = re.findall(r'["\']?confidence["\']?\s*:\s*([0-9.]+)', content)
 
@@ -162,7 +151,6 @@ Task: Classify {len(texts)} comments as 0 (non-toxic) or 1 (toxic).
         n = len(texts)
         results = []
 
-        # ===== TIER 1 =====
         print(f"  [Tier 1] 1 call for {n} samples...")
         expanded = await self._tier1_batch(texts)
         for i, t in enumerate(texts):
@@ -175,7 +163,6 @@ Task: Classify {len(texts)} comments as 0 (non-toxic) or 1 (toxic).
                 }
             )
 
-        # ===== TIER 2: 4 AGENTS =====
         print(f"  [Tier 2] Agent 1/4...")
         primary = await self._agent_batch(texts, "primary")
 
@@ -196,7 +183,6 @@ Task: Classify {len(texts)} comments as 0 (non-toxic) or 1 (toxic).
                 "hybrid": hybrid[i],
             }
 
-        # ===== TIER 3 =====
         print(f"  [Tier 3] Judge consensus (1 call)...")
         prompt = f"""Tổng hợp {n} kết quả từ 4 agents.
 
@@ -247,7 +233,6 @@ JSON: [{"label": "0", "decision": "approve"}, ...]"""
                 "decision": decision_val,
             }
 
-            # ===== TIER 4 =====
             try:
                 self.review_queue.add(
                     task_id=r["task_id"],
@@ -300,7 +285,6 @@ async def run(
 
         print(f"  Saved {len(all_results)} total")
 
-    # Summary
     print(f"\n{'=' * 60}")
     print("SUMMARY")
     print(f"{'=' * 60}")

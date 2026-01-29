@@ -1,11 +1,4 @@
-"""Retrieval-MRL Agent - MAFA Tier 2 Agent 4.
 
-Agent D: Embedding-based with MRL and Unique Examples (edge cases).
-Uses same embedding model but with DIFFERENT examples to increase diversity.
-Follows MAFA pattern: retrieval + LLM classification with ARQ-style prompting.
-
-MAFA Section 4.2.1: ARQ prompts with edge-case analysis and ambiguous pattern detection.
-"""
 
 from typing import Dict, Any, List, Optional
 import threading
@@ -31,17 +24,6 @@ class RetrievalMRLAnnotation:
 
 
 class RetrievalMrlAgent:
-    """MAFA Agent 4: Embedding-based với MRL và Unique Examples.
-
-    Đặc điểm:
-    - Dùng cùng model với Agent 3 (sentence-transformers/all-MiniLM-L6-v2)
-    - Nhưng với DIFFERENT examples để tăng diversity
-    - Examples tập trung vào: edge cases, ambiguous patterns, cross-topic
-    - Weight: 0.25
-
-    MAFA Section 4.6: "Each agent receives 8-15 unique examples from the
-    training pool, specializing their behavior for different query patterns"
-    """
 
     _lock = threading.Lock()
     _model_loaded = False
@@ -58,7 +40,6 @@ class RetrievalMrlAgent:
         self._ensure_loaded()
 
     def _init_llm(self):
-        """Initialize LLM client (Groq or NVIDIA) based on config."""
         try:
             self._llm_client = get_llm_client(self.config)
         except Exception as e:
@@ -66,7 +47,6 @@ class RetrievalMrlAgent:
             self._llm_client = None
 
     def _ensure_loaded(self):
-        """Ensure model và index are loaded."""
         if (
             RetrievalMrlAgent._model_loaded
             and RetrievalMrlAgent._faiss_index is not None
@@ -89,7 +69,6 @@ class RetrievalMrlAgent:
                     self.config.huggingface.embedding_model
                 )
 
-                # Dùng UNIQUE examples (KHÁC Agent 3)
                 examples = self._get_mrl_examples()
                 texts = [ex["text"] for ex in examples]
 
@@ -112,22 +91,13 @@ class RetrievalMrlAgent:
                 RetrievalMrlAgent._faiss_index = None
 
     def _init_unique_examples(self):
-        """Initialize examples RIÊNG BIỆT cho Agent 4.
-
-        Agent 3 (Retrieval) dùng: clear, typical examples
-        Agent 4 (Retrieval-MRL) dùng: edge cases, ambiguous patterns
-        """
         self.examples = self._get_mrl_examples()
 
     def _get_mrl_examples(self) -> List[Dict]:
-        """Get labeled examples for retrieval (MRL Agent).
-
-        Loads from 'seed_file' defined in config.
-        """
         seed_path = None
         if hasattr(self.config, "task") and hasattr(self.config.task, "paths"):
             seed_path = getattr(self.config.task.paths, "seed_file", None)
-        elif hasattr(self.config, "paths"):  # Fallback
+        elif hasattr(self.config, "paths"):
             seed_path = getattr(self.config.paths, "seed_file", None)
 
         if seed_path:
@@ -171,8 +141,6 @@ class RetrievalMrlAgent:
                                             "label": str(row[label_col]).strip(),
                                         }
                                     )
-                            # For MRL/Edge cases: In a real scenario, we might filter specific tricky examples here.
-                            # For now, we use the full seed pool and rely on vector search to find relevant cases.
                             return examples
                         else:
                             raise ValueError(
@@ -183,14 +151,12 @@ class RetrievalMrlAgent:
                 print(f"Error: Failed to load seed examples: {e}")
                 raise
 
-        # NO FALLBACK - Raise error if no examples loaded
         if not seed_path:
             raise ValueError("Seed file path not configured in config.yaml")
 
         raise ValueError(f"No valid examples found in seed file: {seed_path}")
 
     def _retrieve(self, text: str, k: int = 5) -> List[Dict]:
-        """Retrieve similar examples."""
         if (
             RetrievalMrlAgent._faiss_index is None
             or RetrievalMrlAgent._embedding_model is None
@@ -228,14 +194,6 @@ class RetrievalMrlAgent:
     def _build_mafa_prompt(
         self, text: str, nearest: List[Dict], labels: List[str]
     ) -> str:
-        """Build ARQ-style prompt with edge-case examples.
-
-        MAFA Section 4.2.1: ARQ prompts with specialized edge-case analysis.
-        Output MUST be valid JSON (NO FALLBACK).
-
-        NOTE: This method ensures FAISS model is loaded before building prompt.
-        """
-        # Ensure FAISS model is loaded
         self._ensure_loaded()
 
         arq_prompt = ARQPromptBuilder.build_toxicity_arq(
@@ -244,10 +202,6 @@ class RetrievalMrlAgent:
         return ARQPromptBuilder.to_prompt(arq_prompt)
 
     def _parse_response(self, content: str) -> Dict[str, Any]:
-        """Parse ARQ-style response from LLM.
-
-        NO FALLBACK - Response MUST be valid JSON.
-        """
         result = ARQPromptBuilder.parse_response(content)
 
         return {
@@ -261,7 +215,6 @@ class RetrievalMrlAgent:
     async def annotate(
         self, text: str, labels: List[str] | None = None
     ) -> RetrievalMRLAnnotation:
-        """Annotate text using MAFA pattern: retrieval + LLM classification."""
         if labels is None or len(labels) == 0:
             raise ValueError("Labels must be provided for RetrievalMrlAgent")
 
@@ -272,7 +225,7 @@ class RetrievalMrlAgent:
                 "RetrievalMrlAgent not fully initialized (FAISS or LLM missing)"
             )
 
-        nearest = self._retrieve(text, k=3)  # Reduced to 3 for lower token usage
+        nearest = self._retrieve(text, k=3)
 
         if not nearest:
             raise ValueError("No similar examples found for retrieval")
@@ -282,7 +235,6 @@ class RetrievalMrlAgent:
         response = await self._llm_client.chat([{"role": "user", "content": prompt}])
         result = self._parse_response(response.content)
 
-        # Confidence is already numeric from ARQ parsing
         numeric_conf = result.get("confidence", 0.5)
 
         return RetrievalMRLAnnotation(
@@ -295,5 +247,4 @@ class RetrievalMrlAgent:
         return self.weight
 
     def unload(self):
-        """Unload model."""
         self._llm_client = None

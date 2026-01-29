@@ -1,12 +1,4 @@
-"""MAFA-style Weighted Voting Consensus Mechanism.
 
-NO FALLBACK - Strict MAFA pattern implementation.
-
-Implements:
-- Confidence calibration (HIGH/MEDIUM/LOW)
-- Dynamic weights based on historical accuracy
-- Detailed audit trail
-"""
 
 from dataclasses import dataclass
 from typing import List, Dict, Any
@@ -17,8 +9,8 @@ from collections import Counter
 @dataclass
 class Annotation:
     agent_name: str
-    confidence: float  # 0.0-1.0
-    confidence_level: str  # "HIGH"/"MEDIUM"/"LOW"
+    confidence: float
+    confidence_level: str
     result: Dict[str, Any]
     weight: float
     reasoning: str = ""
@@ -35,25 +27,13 @@ class ConsensusResult:
 
 
 class ConsensusEngine:
-    """MAFA-style consensus mechanism.
 
-    NO FALLBACK - All or nothing.
-
-    Features:
-    - Confidence calibration: HIGH ×1.5, MEDIUM ×1.0, LOW ×0.5
-    - Dynamic weights based on historical accuracy
-    - Multi-agent agreement bonus
-    - Detailed audit trail for compliance
-    """
-
-    # Confidence calibration factors (MAFA pattern)
     CONFIDENCE_FACTORS = {
         "HIGH": 1.5,
         "MEDIUM": 1.0,
         "LOW": 0.5,
     }
 
-    # Historical accuracy weights
     AGENT_HISTORICAL_ACCURACY = {
         "primary_only": 0.25,
         "contextual": 0.25,
@@ -66,18 +46,11 @@ class ConsensusEngine:
         annotations: List[Annotation],
         task_type: str = "classification",
     ) -> ConsensusResult:
-        """Calculate weighted consensus with MAFA pattern.
-
-        NO FALLBACK - Raises exception on failure.
-        """
-        # Step 1: Get all predicted labels
         labels = [ann.result.get("label", "unknown") for ann in annotations]
 
-        # Step 2: Calculate multi-agent agreement
         label_counts = Counter(labels)
         agreement_score = label_counts.most_common(1)[0][1] / len(labels)
 
-        # Step 3: Confidence calibration (HIGH ×1.5, MEDIUM ×1.0, LOW ×0.5)
         calibrated_scores = []
         for ann in annotations:
             conf_factor = self.CONFIDENCE_FACTORS.get(ann.confidence_level.upper(), 1.0)
@@ -85,29 +58,23 @@ class ConsensusEngine:
             calibrated_score = ann.confidence * conf_factor * hist_weight
             calibrated_scores.append(calibrated_score)
 
-        # Step 4: Agreement bonus
-        agreement_bonus = agreement_score * 0.1  # 10% bonus
+        agreement_bonus = agreement_score * 0.1
 
-        # Step 5: Final score
         raw_score = sum(calibrated_scores) / len(annotations)
         final_score = min(raw_score + agreement_bonus, 1.0)
 
-        # Step 6: Decision based on MAFA thresholds
         decision = self._get_decision(final_score)
 
-        # Step 7: Final label with agreement consideration
         if agreement_score >= 0.75:
             final_label = label_counts.most_common(1)[0][0]
         else:
             best_idx = calibrated_scores.index(max(calibrated_scores))
             final_label = labels[best_idx]
 
-        # Step 8: Serialize votes
         votes = [
             self._serialize_vote(a, cs) for a, cs in zip(annotations, calibrated_scores)
         ]
 
-        # Step 9: Generate detailed audit trail
         audit_trail = self._generate_audit(
             annotations, labels, label_counts, final_score, decision, final_label
         )
@@ -122,17 +89,15 @@ class ConsensusEngine:
         )
 
     def _get_decision(self, score: float) -> str:
-        """Get decision based on MAFA thresholds."""
         if score >= 0.85:
-            return "approve"  # Auto-approve
+            return "approve"
         elif score >= 0.60:
-            return "review"  # Human review
-        return "escalate"  # Expert escalation
+            return "review"
+        return "escalate"
 
     def _serialize_vote(
         self, annotation: Annotation, calibrated_score: float
     ) -> Dict[str, Any]:
-        """Serialize annotation with calibration details."""
         return {
             "agent": annotation.agent_name,
             "label": annotation.result.get("label", "unknown"),
@@ -158,7 +123,6 @@ class ConsensusEngine:
         decision: str,
         final_label: str,
     ) -> Dict[str, Any]:
-        """Generate detailed audit trail for compliance."""
         conf_levels = Counter(ann.confidence_level.upper() for ann in annotations)
 
         top_label, top_count = label_counts.most_common(1)[0]
@@ -199,7 +163,6 @@ class ConsensusEngine:
         }
 
     def _summarize_reasoning(self, annotations: List[Annotation]) -> str:
-        """Summarize reasoning from all agents."""
         reasons = []
         for ann in annotations:
             reasoning = ann.result.get("reasoning", "") or ann.reasoning
@@ -208,7 +171,6 @@ class ConsensusEngine:
         return " | ".join(reasons) if reasons else "No reasoning provided"
 
     def update_weights(self, agent_name: str, new_accuracy: float):
-        """Update historical accuracy weights (called daily in production)."""
         if agent_name in self.AGENT_HISTORICAL_ACCURACY:
             total = sum(
                 v if k != agent_name else new_accuracy
@@ -218,7 +180,6 @@ class ConsensusEngine:
 
 
 def convert_confidence_to_level(confidence: float) -> str:
-    """Convert numeric confidence to MAFA level."""
     if confidence >= 0.8:
         return "HIGH"
     elif confidence >= 0.5:

@@ -1,15 +1,4 @@
-"""Production Monitoring & Weight Updates - MAFA Component.
 
-Implements MAFA Section 4.5: Production Monitoring
-- Track agent accuracy over time
-- Daily weight updates based on performance
-- Comprehensive metrics for model quality
-
-Flow:
-  1. Track each annotation result with ground truth (when available)
-  2. Calculate agent accuracy per task type
-  3. Update weights daily based on historical performance
-"""
 
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
@@ -27,7 +16,7 @@ class AnnotationRecord:
     task_id: str
     text: str
     true_label: Optional[str]
-    agent_predictions: Dict[str, str]  # agent_name -> predicted_label
+    agent_predictions: Dict[str, str]
     final_label: str
     consensus_score: float
     task_type: str
@@ -44,11 +33,11 @@ class AgentMetrics:
     accuracy: float = 0.5
     task_type_metrics: Dict[str, Dict[str, int]] = field(
         default_factory=dict
-    )  # task_type -> {total, correct}
+    )
     confidence_distribution: Dict[str, int] = field(
         default_factory=dict
-    )  # HIGH/MEDIUM/LOW -> count
-    recent_scores: List[float] = field(default_factory=list)  # Last N accuracy scores
+    )
+    recent_scores: List[float] = field(default_factory=list)
 
     def update(self, prediction: str, true_label: str, confidence: float):
         """Update metrics with new observation."""
@@ -57,18 +46,11 @@ class AgentMetrics:
             self.correct_predictions += 1
         self.accuracy = self.correct_predictions / self.total_annotations
         self.recent_scores.append(1.0 if prediction == true_label else 0.0)
-        if len(self.recent_scores) > 100:  # Keep last 100
+        if len(self.recent_scores) > 100:
             self.recent_scores = self.recent_scores[-100:]
 
 
 class MetricsCollector:
-    """Collect and analyze annotation metrics for weight updates.
-
-    Usage:
-        collector = MetricsCollector()
-        collector.record_annotation(task_id, text, true_label, agent_results, final_label)
-        collector.update_weights()  # Called daily
-    """
 
     def __init__(
         self,
@@ -87,12 +69,10 @@ class MetricsCollector:
         self.window_days = window_days
         self.min_samples = min_samples
 
-        # In-memory storage
         self._records: List[AnnotationRecord] = []
         self._agent_metrics: Dict[str, AgentMetrics] = {}
         self._lock = threading.Lock()
 
-        # Weight configuration
         self._agent_weights: Dict[str, float] = {
             "primary_only": 0.25,
             "contextual": 0.25,
@@ -100,11 +80,9 @@ class MetricsCollector:
             "retrieval_mrl": 0.25,
         }
 
-        # Initialize agent metrics
         for agent in self._agent_weights.keys():
             self._agent_metrics[agent] = AgentMetrics(agent_name=agent)
 
-        # Load existing data
         self._load_from_disk()
 
     def record_annotation(
@@ -118,18 +96,6 @@ class MetricsCollector:
         task_type: str = "classification",
         agent_confidences: Optional[Dict[str, float]] = None,
     ):
-        """Record an annotation for later analysis.
-
-        Args:
-            task_id: Unique task identifier
-            text: Original text
-            true_label: Ground truth label (None if not yet available)
-            agent_predictions: Dict of agent_name -> predicted_label
-            final_label: Final label from Judge
-            consensus_score: Consensus score (0-1)
-            task_type: Type of task
-            agent_confidences: Dict of agent_name -> confidence
-        """
         with self._lock:
             record = AnnotationRecord(
                 task_id=task_id,
@@ -143,7 +109,6 @@ class MetricsCollector:
             )
             self._records.append(record)
 
-            # Update agent metrics if ground truth available
             if true_label is not None:
                 self._update_agent_metrics(
                     agent_predictions, true_label, agent_confidences
@@ -155,39 +120,28 @@ class MetricsCollector:
         true_label: str,
         confidences: Optional[Dict[str, float]],
     ):
-        """Update per-agent metrics with ground truth."""
         for agent_name, pred in predictions.items():
             if agent_name in self._agent_metrics:
                 confidence = confidences.get(agent_name, 0.5) if confidences else 0.5
                 self._agent_metrics[agent_name].update(pred, true_label, confidence)
 
     def calculate_weights(self) -> Dict[str, float]:
-        """Calculate new weights based on historical accuracy.
-
-        MAFA Section 4.5: "Weights are updated daily based on agent accuracy"
-
-        Returns:
-            Dict of agent_name -> weight
-        """
         with self._lock:
             if len(self._records) < self.min_samples:
                 return self._agent_weights.copy()
 
-            # Calculate weighted accuracy scores
             agent_scores: Dict[str, float] = {}
 
             for agent_name, metrics in self._agent_metrics.items():
                 if metrics.total_annotations < self.min_samples:
-                    agent_scores[agent_name] = 0.5  # Default for cold start
+                    agent_scores[agent_name] = 0.5
                 else:
-                    # Use recent accuracy (last 100 or all)
                     recent = metrics.recent_scores[-50:]
                     if recent:
                         agent_scores[agent_name] = sum(recent) / len(recent)
                     else:
                         agent_scores[agent_name] = metrics.accuracy
 
-            # Normalize to sum to 1.0
             total_score = sum(agent_scores.values())
             if total_score > 0:
                 new_weights = {
@@ -199,10 +153,6 @@ class MetricsCollector:
             return new_weights
 
     def update_weights(self) -> Dict[str, float]:
-        """Update agent weights based on accumulated metrics.
-
-        Returns the new weights and stores them.
-        """
         new_weights = self.calculate_weights()
 
         with self._lock:
@@ -212,7 +162,6 @@ class MetricsCollector:
         return new_weights
 
     def get_agent_performance(self, agent_name: str) -> Dict[str, Any]:
-        """Get detailed performance metrics for an agent."""
         if agent_name not in self._agent_metrics:
             return {"error": f"Unknown agent: {agent_name}"}
 
@@ -239,14 +188,12 @@ class MetricsCollector:
         }
 
     def get_overall_stats(self) -> Dict[str, Any]:
-        """Get overall system statistics."""
         with self._lock:
             total_records = len(self._records)
             records_with_truth = sum(
                 1 for r in self._records if r.true_label is not None
             )
 
-            # Calculate system accuracy (final label vs ground truth)
             correct_final = sum(
                 1
                 for r in self._records
@@ -256,7 +203,6 @@ class MetricsCollector:
                 correct_final / records_with_truth if records_with_truth > 0 else 0
             )
 
-            # Agent comparison
             agent_comparison = {}
             for agent_name, metrics in self._agent_metrics.items():
                 if metrics.total_annotations > 0:
@@ -275,7 +221,6 @@ class MetricsCollector:
             }
 
     def get_weight_distribution(self) -> Dict[str, float]:
-        """Get current agent weight distribution."""
         return self._agent_weights.copy()
 
     def apply_ground_truth(
@@ -283,15 +228,10 @@ class MetricsCollector:
         task_id: str,
         true_label: str,
     ):
-        """Apply ground truth to a previously recorded annotation.
-
-        Used when human review provides correct label.
-        """
         with self._lock:
             for record in self._records:
                 if record.task_id == task_id:
                     record.true_label = true_label
-                    # Update agent metrics
                     self._update_agent_metrics(
                         record.agent_predictions,
                         true_label,
@@ -300,13 +240,11 @@ class MetricsCollector:
                     break
 
     def cleanup_old_records(self, days: int = 90):
-        """Remove records older than specified days."""
         cutoff = datetime.now() - timedelta(days=days)
         with self._lock:
             self._records = [r for r in self._records if r.timestamp > cutoff]
 
     def _save_to_disk(self):
-        """Persist metrics to disk."""
         try:
             data = {
                 "weights": self._agent_weights,
@@ -328,7 +266,6 @@ class MetricsCollector:
             print(f"Warning: Failed to save metrics: {e}")
 
     def _load_from_disk(self):
-        """Load persisted metrics from disk."""
         try:
             if not os.path.exists(self.storage_path):
                 return
@@ -356,7 +293,6 @@ class MetricsCollector:
             print(f"Warning: Failed to load metrics: {e}")
 
     def export_metrics(self, path: str = "data/metrics_report.json"):
-        """Export full metrics report."""
         report = {
             "generated_at": datetime.now().isoformat(),
             "statistics": self.get_overall_stats(),
