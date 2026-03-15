@@ -1,67 +1,118 @@
 # =============================================================================
-# MAFA Multi-Agent Annotation System - Configuration File
+# DREAM: Debate-based RElevance Assessment with Multi-agents
+# Based on: arXiv:2602.06526 - Completing Missing Annotation
+#
+# Key features:
+# 1. Opposing Stance Initialization: Two agents with opposing stances
+# 2. Multi-Round Debating with Reciprocal Critique
+# 3. Agreement-based Human Escalation (or LLM Adjudication)
 # =============================================================================
-# All settings are centralized here. Environment variables can override.
 
-# Provider configuration: "nvidia"
-provider:
-  type: "nvidia"
-
-# NVIDIA NIM API settings (OpenAI-compatible)
+# ---------------------------------------------------------------------------
+# LLM Provider (NVIDIA NIM - compatible with OpenAI SDK)
+# ---------------------------------------------------------------------------
 nvidia:
-  enabled: true
   model: "meta/llama-3.3-70b-instruct"
-  # Optional: base_url for other OpenAI-compatible endpoints
-  base_url: "" 
-  temperature: 0.1
-  max_tokens: 1024
+  base_url: "https://integrate.api.nvidia.com/v1"
+  temperature: 0.0  # DREAM uses temperature=0.0 for deterministic output
+  top_p: 0.7
+  max_tokens: 2048
+  stream: false
+  max_retries: 5
+  rate_limit: 40  # requests per minute
 
-embedding:
-  model: "sentence-transformers/all-MiniLM-L6-v2"
-  use_local: true
+# ---------------------------------------------------------------------------
+# Task Definition
+# ---------------------------------------------------------------------------
+task:
+  name: "complaint_detection"
+  text_column: "review"
+  label_column: "label"
 
-faiss:
-  dimension: 384
-  metric: "cosine"
+  labels:
+    "0": "Non-complaint — Pure praise, satisfaction, OR insult/hate speech WITHOUT constructive intent."
+    "1": "Complaint — Dissatisfaction, suggestion, wish, warning, OR mixed (praise+criticism) WITH constructive intent."
 
-agents:
-  weights:
-    primary_only: 0.25
-    contextual: 0.25
-    retrieval: 0.25
-    hybrid: 0.25
+# ---------------------------------------------------------------------------
+# DREAM Configuration (Multi-Agent Debate)
+# ---------------------------------------------------------------------------
+dream:
+  enabled: true
+  
+  # ── Debate Parameters ─────────────────────────────────────────────────
+  debate:
+    max_rounds: 2           # Paper: R=2 is optimal (Section 3.2.2)
+    num_agents: 2           # 2 agents with opposing stances
+    temperature: 0.0        # Deterministic output
+    
+  # ── Complaint Guidelines (theo paper + adapted for complaint detection) ───
+  guidelines: |
+    <guide>
+    1. Label 1 (COMPLAINT): Review thể hiện sự không hài lòng, đề xuất cải thiện, mong muốn, hoặc cảnh báo.
+    2. Label 0 (NON-COMPLAINT): Review chỉ khen ngợi thuần túy, thể hiện sự hài lòng, hoặc insult/hate speech không có constructive intent.
+    3. Đánh giá KHÔNG phải dựa trên từ ngữ tiêu cực/positive, mà dựa trên NỘI DUNG có constructive intent hay không.
+    4. Nếu review có cả khen và chê, ưu tiên Label 1 nếu có constructive intent.
+    </guide>
 
-  retrieval:
-    k_examples: 3  # Number of similar examples to retrieve
+  # ── Agent System Messages (Opposing Stances) ──────────────────────────
 
-thresholds:
-  approve: 0.85
-  review: 0.60
+  # Agent 1: Pro-Complaint (Initial stance: Label 1)
+  agent_complaint_system: |
+    Bạn là Agent_A - chuyên gia phân tích complaint tiếng Việt.
 
-judge:
-  timeout_ms: 200
+    **STANCE BAN ĐẦU CỦA BẠN**: Label 1 (COMPLAINT)
+    Bạn phải bảo vệ stance này, nhưng NẾU bị thuyết phục bởi argument của đối phương, bạn CÓ THỂ thay đổi stance.
 
+    {guidelines}
+
+    **Giới hạn**: Argument tối đa 50 từ. Evidence tối đa 30 từ.
+
+  # Agent 2: Pro-Non-Complaint (Initial stance: Label 0)
+  agent_non_complaint_system: |
+    Bạn là Agent_B - chuyên gia phân tích complaint tiếng Việt.
+
+    **STANCE BAN ĐẦU CỦA BẠN**: Label 0 (NON-COMPLAINT)
+    Bạn phải bảo vệ stance này, nhưng NẾU bị thuyết phục bởi argument của đối phương, bạn CÓ THỂ thay đổi stance.
+
+    {guidelines}
+
+    **Giới hạn**: Argument tối đa 50 từ. Evidence tối đa 30 từ.
+
+  # ── Adjudicator (LLM or Human) ────────────────────────────────────────
+  adjudicator_system: |
+    Bạn là THẨM PHÁN trong hệ thống đánh giá complaint.
+
+    Nhiệm vụ: Đọc lịch sử tranh luận và đưa ra quyết định cuối cùng.
+
+    {guidelines}
+
+    **Nhiệm vụ**:
+    1. Đọc lịch sử tranh luận
+    2. Đánh giá lập luận của mỗi bên - bên nào đúng theo guidelines?
+    3. Đưa ra quyết định cuối cùng (Label 0 hoặc 1)
+    4. Đánh giá confidence (0.0-1.0)
+
+  # ── LLM Settings for DREAM ───────────────────────────────────────────
+  llm:
+    temperature: 0.0  # DREAM uses deterministic output
+    max_tokens: 3072
+
+  # ── Human Escalation ──────────────────────────────────────────────────
+  # DREAM: If agents disagree after max_rounds, escalate to human
+  # with debate history as supportive resource
+  escalation:
+    enabled: true           # Enable human escalation for disagreements
+    use_llm_adjudicator: true  # Use LLM as adjudicator instead of human (faster)
+    adjudicator_model: null  # Use same model as agents if null
+
+# ---------------------------------------------------------------------------
+# Legacy MADISSE config (kept for backward compatibility)
+# ---------------------------------------------------------------------------
+madisse:
+  enabled: false  # Disabled, using DREAM instead
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 logging:
   level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-# Task Configuration (Dynamic)
-task:
-  type: "classification"
-  name: "complaint_detection"
-  description: "Phân loại phàn nàn (Complaint) trong bình luận thương mại điện tử tiếng Việt."
-  
-  labels:
-    "0": "Non-complaint (Label 0) - Khen ngợi, hài lòng, tích cực về sản phẩm/dịch vụ. KHÔNG có phàn nàn hay góp ý gì. Bao gồm cả chửi bới/Hateful KHÔNG mang tính xây dựng."
-    "1": "Complaint (Label 1) - Phàn nàn, góp ý, mong muốn (Wish), cảnh báo. Thể hiện sự không hài lòng giữa kỳ vọng và thực tế. Mang tính xây dựng (Constructive). Kể cả câu có cả khen lẫn chê (Mixed)."
-  
-  columns:
-    text: "review"
-    label: "label"
-  
-  paths:
-    seed_file: "data/seed.csv"
-
-  consensus:
-    approve_threshold: 0.85
-    escalate_threshold: 0.60

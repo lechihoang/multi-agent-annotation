@@ -1,173 +1,217 @@
-# MAFA-ViOCD: Multi-Agent Framework for Vietnamese Complaint Detection
+# DREAM: Multi-Agent Debate Annotation for Vietnamese Complaint Detection
 
-This repository implements an Enterprise-Scale Annotation System based on the MAFA framework (arXiv:2510.14184), optimized for Vietnamese Online Complaint Detection (ViOCD).
+Implementation of **DREAM** (Debate-based RElevance Assessment with Multi-agents) from paper [arXiv:2602.06526](https://arxiv.org/abs/2602.06526).
 
-## System Architecture
+## Overview
 
-The system follows a 4-Tier Multi-Agent architecture designed for high accuracy and consistency:
+DREAM uses **multi-agent debate** with opposing stances to annotate Vietnamese e-commerce reviews (viOCD dataset).
 
-```
-User Input Batch
-       │
-       ▼
-[Tier 1: Query Planner] (Query Expansion)
-       │
-       ├──────────────────────────────────────────────┐
-       │                                              │
-       ▼                                              ▼
-[Tier 2: Specialized Agents (Parallel Execution)]
- ┌─────────────┐  ┌────────────┐  ┌─────────────┐  ┌────────────┐
- │Primary Agent│  │Critic Agent│  │Retrieval Agt│  │Hybrid Agent│
- │(Definition) │  │(Devil's Adv)│ │(Few-shot RAG)│ │(Edge Cases)│
- └──────┬──────┘  └──────┬─────┘  └──────┬──────┘  └──────┬─────┘
-        │                │               │                │
-        └────────────────┼───────────────┼────────────────┘
-                         │
-                         ▼
-               [Tier 3: Judge Agent] (Consensus & Voting)
-                         │
-                         ▼
-                  Confidence Score?
-                 ╱                 ╲
-        [High (>=0.85)]       [Low/Med (<0.85)]
-               │                       │
-               ▼                       ▼
-        [Auto Approve]          [Review Queue] ───> [Tier 4: Human Review]
-```
+### Key Features (from paper)
 
-### Tier 1: Query Planning
-*   **Query Expander:** Analyzes user intent and expands short/ambiguous queries to improve downstream retrieval and classification context.
+1. **Opposing Stance Initialization**: Two agents with opposing initial stances:
+   - Agent_Relevant: Stance = "This is a COMPLAINT (Label 1)"
+   - Agent_Irrelevant: Stance = "This is NOT a COMPLAINT (Label 0)"
 
-### Tier 2: Specialized Agents
-Four parallel agents analyze the input using distinct strategies:
-1.  **Primary Agent:** Performs direct classification based on strict label definitions.
-2.  **Critic Agent (formerly Contextual):** Acts as a "Devil's Advocate" to enforce strict adherence to Olshtain & Weinbach's complaint definitions. It specifically checks for:
-    *   Hate speech disguised as complaints (should be Label 0).
-    *   Constructive criticism hidden in compliments (should be Label 1).
-3.  **Retrieval Agent:** Utilizes RAG (Retrieval-Augmented Generation) to find semantically similar examples from the seed dataset, ensuring consistency with historical annotations.
-4.  **Hybrid Agent:** Combines retrieval with deep reasoning to handle edge cases like sarcasm, teencode, and implicit negation.
+2. **Multi-Round Debating with Reciprocal Critique**:
+   - Agents debate for R rounds (default R=2)
+   - Each agent critiques opponent's arguments
+   - Evidence extraction from review text
 
-### Tier 3: Judge & Consensus
-*   **Judge Agent:** Aggregates outputs from Tier 2 agents using a weighted voting mechanism.
-*   **Decision Logic:**
-    *   **Approve:** High consensus (Confidence >= 0.85).
-    *   **Review:** Moderate consensus or conflicting agents (0.60 <= Confidence < 0.85).
-    *   **Escalate:** Low confidence (Confidence < 0.60).
+3. **Agreement-based Human Escalation**:
+   - If agents agree → use agreed label (high confidence)
+   - If agents disagree → use LLM adjudicator (or escalate to human)
 
-### Tier 4: Human-in-the-Loop
-*   **Review Queue:** Captures ambiguous cases for manual verification.
-*   **Dynamic Feedback:** Human corrections can be used to update agent weights (planned feature).
+### Results (from paper)
+
+| Method | Balanced Accuracy | Escalation Ratio |
+|--------|------------------|------------------|
+| DREAM (R=2) | **95.2%** | **3.5%** |
+| LLMJudge (single agent) | 73.9% | 0.0% |
+| LARA (confidence-based) | 82.1% | 12.5% |
 
 ## Installation
 
-### Local Setup
+```bash
+# Install dependencies
+uv sync
 
-1.  Clone the repository:
-    ```bash
-    git clone <repository_url>
-    cd Multi-agent-annotaton
-    ```
+# Or using pip
+pip install -r requirements.txt
+```
 
-2.  Create and activate a virtual environment:
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate  # Linux/macOS
-    # venv\Scripts\activate   # Windows
-    ```
+## Running on Kaggle
 
-3.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
+### Option 1: Use Kaggle Notebook
 
-4.  Configure Environment Variables:
-    Copy `.env.example` to `.env` and set your API keys (Groq or NVIDIA NIM):
-    ```ini
-    GROQ_API_KEY=gsk_...
-    # or
-    NVIDIA_API_KEY=nvapi-...
-    ```
+1. **Upload files to Kaggle**:
+   - Upload `run.py`, `config.yaml`, and the entire `src/` folder
+   - Upload your input CSV (e.g., `data/unlabeled.csv`)
 
-## Usage
+2. **Create Notebook**:
+   ```python
+   import subprocess
+   import os
 
-### Running Batch Annotation
+   # Install uv if not available
+   !pip install uv
 
-To annotate a large dataset (CSV format):
+   # Install dependencies
+   !uv sync
+
+   # Or install manually
+   !pip install langchain langchain-openai pydantic python-dotenv loguru pyyaml
+   ```
+
+3. **Set up NVIDIA API**:
+   - Add your NVIDIA API key in Kaggle Secrets
+   - Or set it in the notebook:
+   ```python
+   import os
+   os.environ["NVIDIA_API_KEY"] = "your-api-key-here"
+   ```
+
+4. **Run annotation**:
+   ```python
+   !uv run python run.py --input data/unlabeled.csv --output data/annotated.csv --concurrency 2
+   ```
+
+### Option 2: Use Kaggle API (from local)
 
 ```bash
-python scripts/run_arq_batch.py \
-    --input data/unlabeled.csv \
-    --output data/results.csv \
-    --batch-size 10 \
-    --rate 40
+# Upload files to Kaggle
+kaggle notebooks upload-file run.py
+kaggle notebooks upload-file config.yaml
+kaggle notebooks upload-file -r src/ src/
+kaggle notebooks upload-file data/unlabeled.csv
+
+# Or use Kaggle Sessions API
 ```
 
-Arguments:
-*   `--input`: Path to input CSV file. Must contain the text column specified in config.
-*   `--output`: Path to save results.
-*   `--batch-size`: Number of samples per LLM request (Tier 1 optimization).
-*   `--max`: Maximum number of samples to process (optional).
+### Option 3: Use Kaggle Dataset + Notebook
 
-### Running on Kaggle / Google Colab
-
-Use the following commands in a notebook cell:
+1. Create a Kaggle Dataset with your input data
+2. Create a Notebook that reads from the dataset
+3. Run the annotation
+4. Download results using Kagble API:
 
 ```python
-# 1. Setup
-!git clone <repository_url>
-%cd Multi-agent-annotaton
-!pip install -r requirements.txt
+from kaggle.api.kaggle_api_extended import KaggleApi
+api = KaggleApi()
+api.authenticate()
 
-# 2. Set API Key
-import os
-os.environ["GROQ_API_KEY"] = "your_api_key_here"
-
-# 3. Run Annotation
-!python scripts/run_arq_batch.py \
-    --input data/unlabeled.csv \
-    --output results.csv \
-    --batch-size 5
+# Download output
+api.dataset_download_file('your-username/your-dataset', 'annotated.csv')
 ```
+
+### Kaggle GPU/TPU Note
+
+This project uses **NVIDIA NIM API** (cloud-based), so it doesn't require GPU on Kaggle. The API rate limit is 40 requests/minute, which is the main bottleneck.
 
 ## Configuration
 
-The system is fully configurable via `config.yaml`.
+Edit `config.yaml` to customize:
 
-### Task Definition
-Define your classification task and labels:
+- LLM provider (NVIDIA NIM)
+- Debate parameters (max_rounds, temperature)
+- Label definitions for your task
+- Agent prompts
 
-```yaml
-task:
-  name: "complaint_detection"
-  labels:
-    "0": "Non-complaint - Compliments, Neutral, or Hate Speech/Insults"
-    "1": "Complaint - Constructive dissatisfaction/Unmet expectations"
-  
-  columns:
-    text: "review"  # Column name in input CSV
+## Usage
+
+### 1. Annotate Data
+
+```bash
+# Annotate unlabeled reviews
+uv run python run.py --input data/unlabeled.csv --output data/annotated.csv
+
+# Limit to first N samples
+uv run python run.py --input data/unlabeled.csv --output data/annotated.csv --limit 100
+
+# With custom concurrency
+uv run python run.py --input data/unlabeled.csv --output data/annotated.csv --concurrency 5
 ```
 
-### Agent Weights
-Adjust the voting power of each agent:
+### 2. Relabel Existing Dataset
 
-```yaml
-agents:
-  primary: 0.25
-  contextual: 0.25  # Applied to Critic Agent
-  retrieval: 0.25
-  retrieval_mrl: 0.25
+```bash
+# Relabel training set (compares with old labels)
+uv run python run.py --input data/train_labeled.csv --output data/train_relabeled.csv
 ```
 
 ## Output Format
 
-The output CSV contains the following columns:
+CSV output with columns:
 
-*   `text`: Original input text.
-*   `final_label`: The consensus label (0 or 1).
-*   `confidence`: Confidence score (0.0 - 1.0).
-*   `decision`: Action taken (`approve`, `review`, `escalate`).
+| Column | Description |
+|--------|-------------|
+| `task_id` | Unique task identifier |
+| `review` | Original review text |
+| `old_label` | Original label (for relabeling) |
+| `final_label` | `0` (non-complaint) or `1` (complaint) |
+| `confidence` | Confidence score (0.0-1.0) |
+| `reasoning` | Reasoning for the decision |
+| `reached_agreement` | `True` if agents agreed |
+| `agreement_round` | Round where agreement was reached (1 or 2) |
+| `used_adjudicator` | `True` if LLM adjudicator was used |
+| `adjudication_reasoning` | Adjudicator's reasoning |
 
-## References
+## Architecture
 
-*   **MAFA Framework:** Hegazy et al., "MAFA: A Multi-Agent Framework for Enterprise-Scale Annotation with Configurable Task Adaptation", arXiv:2510.14184, 2025. [Link](https://arxiv.org/abs/2510.14184)
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      DREAM Pipeline                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────┐     ┌──────────────┐                    │
+│  │ Agent_Relevant│     │Agent_Irrelevant│                  │
+│  │ (Stance: 1)  │     │  (Stance: 0)  │                  │
+│  └──────┬───────┘     └──────┬───────┘                    │
+│         │                     │                             │
+│         └─────────┬───────────┘                             │
+│                   ▼                                         │
+│          ┌───────────────┐                                  │
+│          │ Debate Round 1 │                                  │
+│          │ (Reciprocal    │                                  │
+│          │  Critique)     │                                  │
+│          └───────┬────────┘                                  │
+│                  │                                           │
+│          ┌──────┴──────┐                                    │
+│          │   Check     │                                    │
+│          │ Agreement?  │                                    │
+│          └──────┬──────┘                                    │
+│                 │                                           │
+│     ┌──────────┴──────────┐                                │
+│     ▼                     ▼                                │
+│  ┌──────┐           ┌─────────────┐                        │
+│  │ YES  │           │    NO       │                        │
+│  └──────┘           └──────┬──────┘                        │
+│     │                      │                                │
+│     ▼                      ▼                                │
+│  ┌────────────┐     ┌─────────────┐                         │
+│  │   Use      │     │ Debate R2   │                         │
+│  │ agreed     │     │ or          │                         │
+│  │ label      │     │ Adjudicator │                         │
+│  └────────────┘     └─────────────┘                         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
+## Dataset
+
+The viOCD (Vietnamese Online Complaint Detection) dataset:
+
+- **Task**: Binary classification (complaint vs non-complaint)
+- **Label 0**: Non-complaint - pure praise, satisfaction, or insult without constructive intent
+- **Label 1**: Complaint - dissatisfaction, suggestion, wish, warning, or mixed with constructive intent
+
+## Adaptation
+
+To adapt for different tasks:
+
+1. Modify `task.labels` in `config.yaml`
+2. Update `dream.guidelines` with task-specific rules
+3. Update agent prompts (`agent_complaint_system`, `agent_non_complaint_system`)
+
+## License
+
+MIT License

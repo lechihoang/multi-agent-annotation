@@ -1,254 +1,161 @@
+"""
+NIM Client using LangChain with structured output.
 
+Uses ChatOpenAI with base_url pointing to NVIDIA NIM.
+"""
 
 import os
-from typing import List, Dict, Any, Optional
+import asyncio
+import time
 from dataclasses import dataclass
+from typing import Optional
 
-
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
 
-
-@dataclass
-class ChatMessage:
-    role: str
-    content: str
+from loguru import logger
 
 
 @dataclass
 class ChatResponse:
     content: str
-    usage: Dict[str, int]
-    finish_reason: str
+    reasoning: Optional[str] = None
+    usage: dict = None
+    finish_reason: str = "stop"
 
 
 class NimClient:
+    """NVIDIA NIM client using LangChain ChatOpenAI."""
 
-    def __init__(
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self, config=None):
+        if self._initialized:
+            return
+
+        if config is None:
+            from ..config import get_config
+            config = get_config()
+
+        self.config = config
+        self.nvidia = config.nvidia
+
+        # LangChain ChatOpenAI pointing to NVIDIA NIM
+        self.llm = ChatOpenAI(
+            model=self.nvidia.model,
+            api_key=self.nvidia.api_key,
+            base_url=self.nvidia.base_url,
+            temperature=self.nvidia.temperature,
+            max_tokens=self.nvidia.max_tokens,
+        )
+
+        # Rate limiting
+        self._lock = asyncio.Lock()
+        self._min_interval = 60.0 / self.nvidia.rate_limit
+        self._last_call = 0.0
+        self._initialized = True
+
+    async def chat(
         self,
-        model: Optional[str] = None,
-        temperature: float = 0.1,
-        max_tokens: int = 512,
-        base_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-    ):
-        """Initialize NIM client.
-
-        Args:
-            model: Model name (loaded from config.yaml if not provided)
-            temperature: Sampling temperature (0.0 - 1.0)
-            max_tokens: Maximum tokens to generate
-            base_url: NIM API base URL (auto-detected if not provided)
-            api_key: API key (uses NIM_API_KEY or NVIDIA_API_KEY env var if not provided)
-        """
-        try:
-            from openai import OpenAI as OpenAILib
-
-            self._api_key = (
-                api_key or os.getenv("NIM_API_KEY") or os.getenv("NVIDIA_API_KEY")
-            )
-            if not self._api_key:
-                raise ValueError(
-                    "NIM_API_KEY or NVIDIA_API_KEY environment variable is required"
-                )
-
-            if model is None:
-                from src.config import get_config
-                config = get_config()
-                model = config.nvidia.model
-
-            if base_url:
-                self.base_url = base_url
-            else:
-                self.base_url = self._get_base_url(model)
-
-            self.client = OpenAILib(
-                api_key=self._api_key,
-                base_url=self.base_url,
-            )
-        except ImportError:
-            raise ImportError("Please install openai: pip install openai")
-        except Exception as e:
-            raise RuntimeError(f"NIM client init failed: {e}")
-
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-
-    def _get_base_url(self, model: str) -> str:
-        env_url = os.getenv("NIM_BASE_URL")
-        if env_url:
-            return env_url
-
-        return "https://integrate.api.nvidia.com/v1"
-
-    async def chat(self, messages: List[Dict[str, str]]) -> ChatResponse:
-        import httpx
-        import asyncio
-
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-        }
-
-        max_retries = 10
-        retry_delay = 30
-
-        async with httpx.AsyncClient(timeout=120.0) as http_client:
-            data = None
-            response = None
-            for attempt in range(max_retries):
-                try:
-                    response = await http_client.post(
-                        f"{self.base_url}/chat/completions",
-                        headers=headers,
-                        json=payload,
-                    )
-
-                    if response.status_code == 429:
-                        retry_after = response.headers.get("Retry-After")
-                        if retry_after:
-                            wait_time = int(retry_after) + 5
-                        else:
-                            wait_time = retry_delay * (2**attempt)
-                            wait_time = min(wait_time, 300)
-
-                        print(
-                            f"  [429] Rate limited. Waiting {wait_time}s before retry ({attempt + 1}/{max_retries})..."
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
-
-                    response.raise_for_status()
-                    data = response.json()
-
-                    break
-                except httpx.HTTPStatusError as e:
-                    if e.response.status_code == 429:
-                        print(f"  [429] HTTPStatusError caught. Retrying...")
-                        await asyncio.sleep(30)
-                        continue
-                    raise e
-                except (httpx.ConnectError, httpx.ReadTimeout) as e:
-                    print(f"  [Network] {e}. Retrying in 10s...")
-                    await asyncio.sleep(10)
-                    continue
-
-            else:
-                if response:
-                    response.raise_for_status()
-                else:
-                    raise RuntimeError(
-                        "Failed to get response from NIM API after multiple retries"
-                    )
-
-        if data is None:
-            raise RuntimeError("No data received from NIM API")
-
-        choice = data["choices"][0]
-        message = choice["message"]
-
-        content = message.get("content", "")
-        if not content and message.get("reasoning_content"):
-            content = message.get("reasoning_content", "")
-
-        return ChatResponse(
-            content=content,
-            usage=data.get("usage", {}),
-            finish_reason=choice.get("finish_reason", "stop"),
-        )
-
-    async def structured(
-        self, messages: List[Dict[str, str]], schema: Dict[str, Any]
+        messages: list[dict],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ) -> ChatResponse:
-        import httpx
+        """Basic chat - returns raw response."""
+        # Rate limiting
+        async with self._lock:
+            elapsed = time.time() - self._last_call
+            if elapsed < self._min_interval:
+                await asyncio.sleep(self._min_interval - elapsed)
+            self._last_call = time.time()
 
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
+        # Convert messages to LangChain format
+        from langchain_core.messages import HumanMessage, SystemMessage
 
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-            "response_format": {
-                "type": "json_object",
-                "schema": schema,
-            },
-        }
-
-        async with httpx.AsyncClient(timeout=120.0) as http_client:
-            response = await http_client.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
-
-        choice = data["choices"][0]
-        message = choice["message"]
-
-        content = message.get("content", "")
-        if not content and message.get("reasoning_content"):
-            content = message.get("reasoning_content", "")
-
-        return ChatResponse(
-            content=content,
-            usage=data.get("usage", {}),
-            finish_reason=choice.get("finish_reason", "stop"),
-        )
-
-    def is_available(self) -> bool:
-        import httpx
+        lc_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                lc_messages.append(SystemMessage(content=msg["content"]))
+            else:
+                lc_messages.append(HumanMessage(content=msg["content"]))
 
         try:
-            headers = {
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": self.model,
-                "messages": [{"role": "user", "content": "test"}],
-                "max_tokens": 1,
-            }
+            response = await self.llm.ainvoke(
+                lc_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
 
-            with httpx.Client(timeout=10.0) as http_client:
-                response = http_client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-                return response.status_code == 200
-        except Exception:
-            return False
+            return ChatResponse(
+                content=response.content,
+                usage={},
+                finish_reason="stop",
+            )
+        except Exception as e:
+            logger.error(f"NIM API error: {e}")
+            raise
+
+    async def chat_structured(
+        self,
+        messages: list[dict],
+        response_model: type[BaseModel],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> BaseModel:
+        """Chat with structured output - uses LangChain with_structured_output."""
+        # Rate limiting
+        async with self._lock:
+            elapsed = time.time() - self._last_call
+            if elapsed < self._min_interval:
+                await asyncio.sleep(self._min_interval - elapsed)
+            self._last_call = time.time()
+
+        # Convert messages to LangChain format
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        lc_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                lc_messages.append(SystemMessage(content=msg["content"]))
+            else:
+                lc_messages.append(HumanMessage(content=msg["content"]))
+
+        # Create structured LLM
+        structured_llm = self.llm.with_structured_output(response_model)
+
+        try:
+            result = await structured_llm.ainvoke(
+                lc_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Structured output failed: {e}")
+            raise
 
 
-def get_nim_client(
-    model: Optional[str] = None,
-    temperature: float = 0.1,
-    max_tokens: int = 512,
-) -> Optional[NimClient]:
-    api_key = os.getenv("NIM_API_KEY") or os.getenv("NVIDIA_API_KEY")
-    if not api_key:
-        return None
+# Singleton accessor
+_nim_client = None
 
-    try:
-        return NimClient(
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-    except Exception as e:
-        print(f"Warning: Could not initialize NIM client: {e}")
-        return None
+
+def get_nim_client(config=None) -> NimClient:
+    global _nim_client
+    if _nim_client is None:
+        _nim_client = NimClient(config)
+    return _nim_client
+
+
+def reset_nim_client():
+    """Reset client (useful for testing)."""
+    global _nim_client
+    _nim_client = None

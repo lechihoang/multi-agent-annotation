@@ -1,289 +1,244 @@
-
-
 import os
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 
-def _load_yaml_config(config_path: str = "config.yaml") -> Dict[str, Any]:
+def _load_yaml(path: str = "config.yaml") -> Dict[str, Any]:
     import yaml
 
-    if not os.path.exists(config_path):
+    if not os.path.exists(path):
         return {}
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except Exception as e:
-        print(f"Warning: Failed to load config.yaml: {e}")
-        return {}
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
 
-def _get_env_override(key: str, default: Any = None) -> Any:
-    env_key = f"MAFA_{key.upper()}"
-    value = os.getenv(env_key)
-    if value is not None:
-        return value
-    return default
-
-
-def _parse_list(value: str) -> List[str]:
-    if isinstance(value, list):
-        return value
-    if isinstance(value, str):
-        return [v.strip() for v in value.split(",") if v.strip()]
-    return []
+def _get(d: Dict, *keys, default=None):
+    v: Any = d
+    for k in keys:
+        if not isinstance(v, dict):
+            return default
+        v = v.get(k)
+        if v is None:
+            return default
+    return v
 
 
 @dataclass
 class NvidiaConfig:
-
-    api_key: str = ""
-    model: str = "llama-3.1-8b-instant"
-    temperature: float = 0.1
-    max_tokens: int = 512
-    retry_attempts: int = 3
-    retry_delay: int = 5
-
-
-@dataclass
-class HuggingFaceConfig:
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    use_local: bool = True
-
-
-@dataclass
-class FAISSConfig:
-    dimension: int = 384
-    metric: str = "cosine"
-
-
-@dataclass
-class AgentWeights:
-    primary_only: float = 0.25
-    contextual: float = 0.25
-    retrieval: float = 0.25
-    hybrid: float = 0.25
-
-
-@dataclass
-class RetrievalConfig:
-    k_examples: int = 3
-
-
-@dataclass
-class ConfidenceThresholds:
-    approve: float = 0.85
-    review: float = 0.60
-
-
-@dataclass
-class JudgeConfig:
-    timeout_ms: int = 200
-
-
-@dataclass
-class LoggingConfig:
-    level: str = "INFO"
-    format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-
-@dataclass
-class TaskColumns:
-    text: str = "Comment"
-    title: str = "Title"
-    label: str = "Toxicity"
-
-
-@dataclass
-class TaskPaths:
-    seed_file: str = ""
-
-
-@dataclass
-class TaskConsensus:
-    approve_threshold: float = 0.85
-    escalate_threshold: float = 0.60
+    model: str = "meta/llama-3.3-70b-instruct"
+    base_url: str = "https://integrate.api.nvidia.com/v1"
+    temperature: float = 0.0  # DREAM uses temperature=0.0
+    top_p: float = 0.7
+    max_tokens: int = 2048
+    stream: bool = False
+    max_retries: int = 5
+    rate_limit: int = 40
+    api_key: str = field(
+        default_factory=lambda: (
+            os.getenv("NVIDIA_API_KEY", "") or os.getenv("NIM_API_KEY", "")
+        )
+    )
 
 
 @dataclass
 class TaskConfig:
-    type: str = "classification"
-    description: str = "Phân loại toxicity cho comment tiếng Việt"
-    labels: List[str] = field(default_factory=lambda: ["0", "1"])
-    columns: TaskColumns = field(default_factory=TaskColumns)
-    paths: TaskPaths = field(default_factory=TaskPaths)
-    consensus: TaskConsensus = field(default_factory=TaskConsensus)
+    name: str = "complaint_detection"
+    text_column: str = "review"
+    label_column: str = "label"
+    labels: Dict[str, str] = field(
+        default_factory=lambda: {
+            "0": "Non-complaint — Pure praise, satisfaction, OR insult/hate speech WITHOUT constructive intent.",
+            "1": "Complaint — Dissatisfaction, suggestion, wish, warning, OR mixed WITH constructive intent.",
+        }
+    )
 
-    def get_labels(self) -> List[str]:
-        return self.labels
+
+# ---------------------------------------------------------------------------
+# DREAM Configuration (Multi-Agent Debate)
+# Based on arXiv:2602.06526
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DreamDebateConfig:
+    max_rounds: int = 2  # Paper: R=2 is optimal
+    num_agents: int = 2  # 2 agents with opposing stances
+    temperature: float = 0.0  # Deterministic output
 
 
 @dataclass
-class NvidiaConfig:
-    """NVIDIA NIM API configuration (loaded from config.yaml)."""
-
-    api_key: str = ""
-    model: str = ""
-    base_url: str = ""
-    temperature: float = 0.1
-    max_tokens: int = 512
-    enabled: bool = False
+class DreamAmbiguityConfig:
+    enabled: bool = False  # DREAM uses agreement, not ambiguity detection
+    detection_threshold: float = 0.5
 
 
 @dataclass
-class ProviderConfig:
-    """LLM provider configuration (NVIDIA)."""
+class DreamLLMConfig:
+    temperature: float = 0.0  # DREAM uses deterministic output
+    max_tokens: int = 1024
 
-    type: str = "nvidia"
+
+@dataclass
+class DreamEscalationConfig:
+    enabled: bool = True  # Enable human escalation for disagreements
+    use_llm_adjudicator: bool = True  # Use LLM as adjudicator instead of human
+    adjudicator_model: Optional[str] = None  # Use same model as agents if null
+
+
+@dataclass
+class DreamConfig:
+    enabled: bool = True
+    guidelines: str = ""
+    agent_complaint_system: str = ""
+    agent_non_complaint_system: str = ""
+    adjudicator_system: str = ""
+    debate_round1_system: str = ""
+    debate_roundN_system: str = ""
+    debate: DreamDebateConfig = field(default_factory=DreamDebateConfig)
+    ambiguity: DreamAmbiguityConfig = field(default_factory=DreamAmbiguityConfig)
+    llm: DreamLLMConfig = field(default_factory=DreamLLMConfig)
+    escalation: DreamEscalationConfig = field(default_factory=DreamEscalationConfig)
+
+
+# ---------------------------------------------------------------------------
+# Legacy MADISSE Configuration (backward compatibility)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MadisseDebateConfig:
+    max_rounds: int = 2
+    num_agents: int = 2
+
+
+@dataclass
+class MadisseAmbiguityConfig:
+    enabled: bool = True
+    detection_threshold: float = 0.5
+
+
+@dataclass
+class MadisseLLMConfig:
+    temperature: float = 0.6
+    max_tokens: int = 2048
+
+
+@dataclass
+class MadisseConfig:
+    enabled: bool = False  # Disabled by default, use DREAM instead
+    guidelines: str = ""
+    agent_complaint_system: str = ""
+    agent_non_complaint_system: str = ""
+    adjudicator_system: str = ""
+    ambiguity_system: str = ""
+    debate: MadisseDebateConfig = field(default_factory=MadisseDebateConfig)
+    ambiguity: MadisseAmbiguityConfig = field(default_factory=MadisseAmbiguityConfig)
+    llm: MadisseLLMConfig = field(default_factory=MadisseLLMConfig)
 
 
 @dataclass
 class Config:
-
-    provider: ProviderConfig
     nvidia: NvidiaConfig
-    huggingface: HuggingFaceConfig
-    faiss: FAISSConfig
-    agents: AgentWeights
-    retrieval: RetrievalConfig
-    thresholds: ConfidenceThresholds
-    judge: JudgeConfig
-    logging: LoggingConfig
     task: TaskConfig
+    dream: DreamConfig
+    madisse: MadisseConfig  # Legacy, kept for backward compatibility
+    logging_level: str = "INFO"
 
 
-def load_config(config_path: str = "config.yaml") -> Config:
-    yaml_config = _load_yaml_config(config_path)
+def load_config(path: str = "config.yaml") -> Config:
+    d = _load_yaml(path)
+    nv = _get(d, "nvidia") or {}
+    task = _get(d, "task") or {}
 
-    def get(path: str, default: Any = None) -> Any:
-        env_value = _get_env_override(path)
-        if env_value is not None:
-            return env_value
-        keys = path.split(".")
-        value = yaml_config
-        for key in keys:
-            if isinstance(value, dict):
-                value = value.get(key)
-            else:
-                return default
-        return value if value is not None else default
+    # Load DREAM config
+    dream = _get(d, "dream") or {}
+    dream_debate = _get(dream, "debate") or {}
+    dream_ambig = _get(dream, "ambiguity") or {}
+    dream_llm = _get(dream, "llm") or {}
+    dream_escalation = _get(dream, "escalation") or {}
 
-    def get_section(path: str, default: Dict = {}) -> Dict:
-        keys = path.split(".")
-        value = yaml_config
-        for key in keys:
-            if isinstance(value, dict):
-                value = value.get(key, {})
-            else:
-                return default
-        return value if value else default
+    # Load MADISSE config (legacy)
+    mad = _get(d, "madisse") or {}
+    mad_debate = _get(mad, "debate") or {}
+    mad_ambig = _get(mad, "ambiguity") or {}
+    mad_llm = _get(mad, "llm") or {}
 
     return Config(
-        provider=ProviderConfig(
-            type=get("provider.type", "nvidia"),
-        ),
         nvidia=NvidiaConfig(
-            api_key=get("nvidia.api_key", "")
-            or os.getenv("NVIDIA_API_KEY", "")
-            or os.getenv("NIM_API_KEY", ""),
-            model=get("nvidia.model", ""),
-            base_url=get("nvidia.base_url", ""),
-            temperature=float(get("nvidia.temperature", 0.1)),
-            max_tokens=int(get("nvidia.max_tokens", 512)),
-            enabled=get("nvidia.enabled", False),
-        ),
-        huggingface=HuggingFaceConfig(
-            embedding_model=get(
-                "embedding.model", "sentence-transformers/all-MiniLM-L6-v2"
-            ),
-            use_local=get("embedding.use_local", True),
-        ),
-        faiss=FAISSConfig(
-            dimension=int(get("faiss.dimension", 384)),
-            metric=get("faiss.metric", "cosine"),
-        ),
-        agents=AgentWeights(
-            primary_only=float(get("agents.weights.primary_only", 0.25)),
-            contextual=float(get("agents.weights.contextual", 0.25)),
-            retrieval=float(get("agents.weights.retrieval", 0.25)),
-            hybrid=float(get("agents.weights.hybrid", 0.25)),
-        ),
-        retrieval=RetrievalConfig(
-            k_examples=int(get("agents.retrieval.k_examples", 3)),
-        ),
-        thresholds=ConfidenceThresholds(
-            approve=float(get("thresholds.approve", 0.85)),
-            review=float(get("thresholds.review", 0.60)),
-        ),
-        judge=JudgeConfig(
-            timeout_ms=int(get("judge.timeout_ms", 200)),
-        ),
-        logging=LoggingConfig(
-            level=get("logging.level", "INFO"),
-            format=get(
-                "logging.format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            ),
+            model=nv.get("model", "meta/llama-3.3-70b-instruct"),
+            base_url=nv.get("base_url", "https://integrate.api.nvidia.com/v1"),
+            temperature=float(nv.get("temperature", 0.0)),
+            top_p=float(nv.get("top_p", 0.7)),
+            max_tokens=int(nv.get("max_tokens", 2048)),
+            stream=bool(nv.get("stream", False)),
+            max_retries=int(nv.get("max_retries", 5)),
+            rate_limit=int(nv.get("rate_limit", 40)),
         ),
         task=TaskConfig(
-            type=get("task.type", "classification"),
-            description=get(
-                "task.description", "Phân loại toxicity cho comment tiếng Việt"
+            name=task.get("name", "complaint_detection"),
+            text_column=task.get("text_column", "review"),
+            label_column=task.get("label_column", "label"),
+            labels=task.get("labels", {"0": "Non-complaint", "1": "Complaint"}),
+        ),
+        dream=DreamConfig(
+            enabled=dream.get("enabled", True),
+            guidelines=dream.get("guidelines", ""),
+            agent_complaint_system=dream.get("agent_complaint_system", ""),
+            agent_non_complaint_system=dream.get("agent_non_complaint_system", ""),
+            adjudicator_system=dream.get("adjudicator_system", ""),
+            debate_round1_system=dream.get("debate_round1_system", ""),
+            debate_roundN_system=dream.get("debate_roundN_system", ""),
+            debate=DreamDebateConfig(
+                max_rounds=int(dream_debate.get("max_rounds", 2)),
+                num_agents=int(dream_debate.get("num_agents", 2)),
+                temperature=float(dream_debate.get("temperature", 0.0)),
             ),
-            labels=_parse_list(get("task.labels", ["0", "1"])),
-            columns=TaskColumns(
-                text=get("task.columns.text", "Comment"),
-                title=get("task.columns.title", "Title"),
-                label=get("task.columns.label", "Toxicity"),
+            ambiguity=DreamAmbiguityConfig(
+                enabled=dream_ambig.get("enabled", False),
+                detection_threshold=float(dream_ambig.get("detection_threshold", 0.5)),
             ),
-            paths=TaskPaths(
-                seed_file=get("task.paths.seed_file", ""),
+            llm=DreamLLMConfig(
+                temperature=float(dream_llm.get("temperature", 0.0)),
+                max_tokens=int(dream_llm.get("max_tokens", 1024)),
             ),
-            consensus=TaskConsensus(
-                approve_threshold=float(get("task.consensus.approve_threshold", 0.85)),
-                escalate_threshold=float(
-                    get("task.consensus.escalate_threshold", 0.60)
-                ),
+            escalation=DreamEscalationConfig(
+                enabled=dream_escalation.get("enabled", True),
+                use_llm_adjudicator=dream_escalation.get("use_llm_adjudicator", True),
+                adjudicator_model=dream_escalation.get("adjudicator_model"),
             ),
         ),
+        madisse=MadisseConfig(
+            enabled=mad.get("enabled", False),
+            guidelines=mad.get("guidelines", ""),
+            agent_complaint_system=mad.get("agent_complaint_system", ""),
+            agent_non_complaint_system=mad.get("agent_non_complaint_system", ""),
+            adjudicator_system=mad.get("adjudicator_system", ""),
+            ambiguity_system=mad.get("ambiguity_system", ""),
+            debate=MadisseDebateConfig(
+                max_rounds=int(mad_debate.get("max_rounds", 2)),
+                num_agents=int(mad_debate.get("num_agents", 2)),
+            ),
+            ambiguity=MadisseAmbiguityConfig(
+                enabled=mad_ambig.get("enabled", True),
+                detection_threshold=float(mad_ambig.get("detection_threshold", 0.5)),
+            ),
+            llm=MadisseLLMConfig(
+                temperature=float(mad_llm.get("temperature", 0.6)),
+                max_tokens=int(mad_llm.get("max_tokens", 2048)),
+            ),
+        ),
+        logging_level=_get(d, "logging", "level") or "INFO",
     )
 
 
 _config: Optional[Config] = None
 
 
-def get_config(config_path: str = "config.yaml") -> Config:
+def get_config(path: str = "config.yaml") -> Config:
     global _config
     if _config is None:
-        _config = load_config(config_path)
+        _config = load_config(path)
     return _config
 
 
 def reset_config():
     global _config
     _config = None
-
-
-def get_llm_client(config: Config = None):
-    if config is None:
-        config = get_config()
-
-    provider_type = config.provider.type.lower()
-
-    if provider_type == "nvidia" or config.nvidia.enabled:
-        try:
-            from .api.nim_client import NimClient
-
-            return NimClient(
-                model=config.nvidia.model,
-                temperature=config.nvidia.temperature,
-                max_tokens=config.nvidia.max_tokens,
-                base_url=config.nvidia.base_url if config.nvidia.base_url else None,
-                api_key=config.nvidia.api_key if config.nvidia.api_key else None,
-            )
-        except Exception as e:
-            print(f"Warning: Could not initialize NIM client: {e}")
-            return None
-
-    print(f"Warning: Unknown provider '{provider_type}' or provider disabled.")
-    return None

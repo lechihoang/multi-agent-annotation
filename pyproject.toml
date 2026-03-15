@@ -1,0 +1,36 @@
+[project]
+name = "multi-agent-annotation"
+version = "0.2.0"
+description = "Multi-agent annotation & data generation for viOCD (Vietnamese Online Complaint Detection)"
+requires-python = ">=3.10"
+dependencies = [
+    "langgraph>=0.2.0",
+    "langchain-core>=0.2.0",
+    "langchain-openai>=0.1.0",
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "loguru>=0.7.0",
+    "pyyaml>=6.0",
+    "autogen>=0.2.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.25.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
