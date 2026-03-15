@@ -49,9 +49,9 @@ dream:
   guidelines: |
     <guide>
     1. Label 1 (COMPLAINT): Review thể hiện sự không hài lòng, đề xuất cải thiện, mong muốn, hoặc cảnh báo.
-    2. Label 0 (NON-COMPLAINT): Review chỉ khen ngợi thuần túy, thể hiện sự hài lòng, hoặc insult/hate speech không có constructive intent.
-    3. Đánh giá KHÔNG phải dựa trên từ ngữ tiêu cực/positive, mà dựa trên NỘI DUNG có constructive intent hay không.
-    4. Nếu review có cả khen và chê, ưu tiên Label 1 nếu có constructive intent.
+    2. Label 0 (NON-COMPLAINT): Review chỉ khen ngợi thuần túy, thể hiện sự hài lòng HOẶC chỉ là insult/hate speech không có constructive intent.
+    3. Đánh giá DỰA TRÊN NỘI DUNG: có constructive intent (đề xuất, phàn nàn, mong muốn) mới là Label 1.
+    4. Khen + chê = xem xét có constructive intent không? CÓ mới Label 1.
     </guide>
 
   # ── Agent System Messages (Opposing Stances) ──────────────────────────
@@ -59,43 +59,49 @@ dream:
   # Agent 1: Pro-Complaint (Initial stance: Label 1)
   agent_complaint_system: |
     Bạn là Agent_A - chuyên gia phân tích complaint tiếng Việt.
-
-    **STANCE BAN ĐẦU CỦA BẠN**: Label 1 (COMPLAINT)
-    Bạn phải bảo vệ stance này, nhưng NẾU bị thuyết phục bởi argument của đối phương, bạn CÓ THỂ thay đổi stance.
-
+    **STANCE BAN ĐẦU**: Label 1 (COMPLAINT)
     {guidelines}
-
-    **Giới hạn**: Argument tối đa 50 từ. Evidence tối đa 30 từ.
+    Trả lời ngắn gọn: Evidence, Argument, Label.
 
   # Agent 2: Pro-Non-Complaint (Initial stance: Label 0)
   agent_non_complaint_system: |
     Bạn là Agent_B - chuyên gia phân tích complaint tiếng Việt.
-
-    **STANCE BAN ĐẦU CỦA BẠN**: Label 0 (NON-COMPLAINT)
-    Bạn phải bảo vệ stance này, nhưng NẾU bị thuyết phục bởi argument của đối phương, bạn CÓ THỂ thay đổi stance.
-
+    **STANCE BAN ĐẦU**: Label 0 (NON-COMPLAINT)
     {guidelines}
-
-    **Giới hạn**: Argument tối đa 50 từ. Evidence tối đa 30 từ.
+    Trả lời ngắn gọn: Evidence, Argument, Label.
 
   # ── Adjudicator (LLM or Human) ────────────────────────────────────────
   adjudicator_system: |
-    Bạn là THẨM PHÁN trong hệ thống đánh giá complaint.
-
-    Nhiệm vụ: Đọc lịch sử tranh luận và đưa ra quyết định cuối cùng.
-
+    Bạn là THẨM PHÁN. Đọc lịch sử tranh luận, đưa ra quyết định cuối cùng.
     {guidelines}
+    Trả lời: final_label, confidence, reasoning.
 
-    **Nhiệm vụ**:
-    1. Đọc lịch sử tranh luận
-    2. Đánh giá lập luận của mỗi bên - bên nào đúng theo guidelines?
-    3. Đưa ra quyết định cuối cùng (Label 0 hoặc 1)
-    4. Đánh giá confidence (0.0-1.0)
+  # ── User Prompt Templates ────────────────────────────────────────────
+  # Template for agent user prompt
+  agent_user_template: |
+    Review: {review}
+    Stance hiện tại: Label {stance}
+    Có thể giữ hoặc THAY ĐỔI stance nếu bị thuyết phục.
+    Trả lời: Evidence, Argument, Label.
+
+  # Template for subsequent rounds (with history)
+  agent_roundN_template: |
+    Review: {review}
+    Stance hiện tại: Label {stance}
+    Lịch sử: {history}
+    Phản bác hoặc thừa nhận. Có thể giữ hoặc THAY ĐỔI stance.
+    Trả lời: Evidence, Argument, Label.
+
+  # Template for adjudicator user prompt
+  adjudicator_user_template: |
+    Review: {review}
+    Lịch sử tranh luận: {history}
+    Hai Agent không đồng ý. Quyết định: final_label, confidence, reasoning.
 
   # ── LLM Settings for DREAM ───────────────────────────────────────────
   llm:
     temperature: 0.0  # DREAM uses deterministic output
-    max_tokens: 3072
+    max_tokens: 4096
 
   # ── Human Escalation ──────────────────────────────────────────────────
   # DREAM: If agents disagree after max_rounds, escalate to human

@@ -31,39 +31,23 @@ def _build_user_prompt(
     agent_name: str,
     stance: str,
     history: List[DebateTurn],
+    config,
 ) -> str:
     """Build user prompt for debate turn."""
     target_label = "1" if stance == "relevant" else "0"
-    base_prompt = f"""Review cần phân loại:
-
-{review}
-
-**Stance hiện tại**: Label {target_label}
-Bạn có thể giữ stance này hoặc THAY ĐỔI stance nếu bị thuyết phục.
-
-Evidence: <trích đoạn từ review>
-Argument: <lập luận của bạn>
-Label: <0 hoặc 1>"""
 
     if not history:
-        # First round - just the review
-        return base_prompt
+        # First round - use template from config
+        template = config.dream.agent_user_template
+        return template.format(review=review, stance=target_label)
     else:
-        # Subsequent rounds - include history
+        # Subsequent rounds - use roundN template
+        template = config.dream.agent_roundN_template
         history_str = "\n\n".join([
             f"**{turn.agent}** (Label {turn.label}):\n{turn.argument}\nEvidence: {turn.evidence}"
             for turn in history
         ])
-        return f"""{base_prompt}
-
-**Lịch sử tranh luận trước đó**:
-{history_str}
-
-**Nhiệm vụ thêm**:
-- Đọc argument của đối phương
-- Phản bác hoặc thừa nhận điểm hợp lý
-- Có thể giữ stance hoặc THAY ĐỔI stance nếu bị thuyết phục
-- Tìm thêm bằng chứng nếu cần"""
+        return template.format(review=review, stance=target_label, history=history_str)
 
 
 async def run_agent_turn(
@@ -80,7 +64,7 @@ async def run_agent_turn(
     llm = get_nim_client()
 
     system_prompt = _build_system_prompt(config, stance)
-    user_prompt = _build_user_prompt(review, agent_name, stance, history)
+    user_prompt = _build_user_prompt(review, agent_name, stance, history, config)
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -126,14 +110,8 @@ async def run_adjudicator(
     system_prompt = config.dream.adjudicator_system.format(
         guidelines=config.dream.guidelines
     )
-    user_prompt = f"""Review cần phân loại:
-
-{review}
-
-**Lịch sử tranh luận**:
-{history_str}
-
-Hai Agent không đồng ý. Hãy đưa ra quyết định cuối cùng dựa trên lập luận của cả hai bên."""
+    template = config.dream.adjudicator_user_template
+    user_prompt = template.format(review=review, history=history_str)
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -146,7 +124,7 @@ Hai Agent không đồng ý. Hãy đưa ra quyết định cuối cùng dựa tr
         messages=messages,
         response_model=AdjudicationModel,
         temperature=0.3,  # Lower temp for adjudicator
-        max_tokens=1024,
+        max_tokens=2048,
     )
 
     logger.debug(f"[Adjudicator] → label={result.final_label}, confidence={result.confidence}")

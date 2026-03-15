@@ -91,8 +91,9 @@ class DreamConfig:
     agent_complaint_system: str = ""
     agent_non_complaint_system: str = ""
     adjudicator_system: str = ""
-    debate_round1_system: str = ""
-    debate_roundN_system: str = ""
+    agent_user_template: str = ""
+    agent_roundN_template: str = ""
+    adjudicator_user_template: str = ""
     debate: DreamDebateConfig = field(default_factory=DreamDebateConfig)
     ambiguity: DreamAmbiguityConfig = field(default_factory=DreamAmbiguityConfig)
     llm: DreamLLMConfig = field(default_factory=DreamLLMConfig)
@@ -184,8 +185,9 @@ def load_config(path: str = "config.yaml") -> Config:
             agent_complaint_system=dream.get("agent_complaint_system", ""),
             agent_non_complaint_system=dream.get("agent_non_complaint_system", ""),
             adjudicator_system=dream.get("adjudicator_system", ""),
-            debate_round1_system=dream.get("debate_round1_system", ""),
-            debate_roundN_system=dream.get("debate_roundN_system", ""),
+            agent_user_template=dream.get("agent_user_template", ""),
+            agent_roundN_template=dream.get("agent_roundN_template", ""),
+            adjudicator_user_template=dream.get("adjudicator_user_template", ""),
             debate=DreamDebateConfig(
                 max_rounds=int(dream_debate.get("max_rounds", 2)),
                 num_agents=int(dream_debate.get("num_agents", 2)),

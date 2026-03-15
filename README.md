@@ -41,65 +41,28 @@ pip install -r requirements.txt
 
 ## Running on Kaggle
 
-### Option 1: Use Kaggle Notebook
-
-1. **Upload files to Kaggle**:
-   - Upload `run.py`, `config.yaml`, and the entire `src/` folder
-   - Upload your input CSV (e.g., `data/unlabeled.csv`)
-
-2. **Create Notebook**:
-   ```python
-   import subprocess
-   import os
-
-   # Install uv if not available
-   !pip install uv
-
-   # Install dependencies
-   !uv sync
-
-   # Or install manually
-   !pip install langchain langchain-openai pydantic python-dotenv loguru pyyaml
-   ```
-
-3. **Set up NVIDIA API**:
-   - Add your NVIDIA API key in Kaggle Secrets
-   - Or set it in the notebook:
-   ```python
-   import os
-   os.environ["NVIDIA_API_KEY"] = "your-api-key-here"
-   ```
-
-4. **Run annotation**:
-   ```python
-   !uv run python run.py --input data/unlabeled.csv --output data/annotated.csv --concurrency 2
-   ```
-
-### Option 2: Use Kaggle API (from local)
-
-```bash
-# Upload files to Kaggle
-kaggle notebooks upload-file run.py
-kaggle notebooks upload-file config.yaml
-kaggle notebooks upload-file -r src/ src/
-kaggle notebooks upload-file data/unlabeled.csv
-
-# Or use Kaggle Sessions API
-```
-
-### Option 3: Use Kaggle Dataset + Notebook
-
-1. Create a Kaggle Dataset with your input data
-2. Create a Notebook that reads from the dataset
-3. Run the annotation
-4. Download results using Kagble API:
+Create a new Notebook and run this in one cell:
 
 ```python
+# Clone the project
+!git clone https://github.com/your-repo/multi-agent-annotation.git
+%cd multi-agent-annotation
+
+# Set up NVIDIA API key
+import os
+os.environ["NVIDIA_API_KEY"] = "your-api-key-here"  # Or use Kaggle Secrets
+
+# Install uv and dependencies
+!pip install uv
+!uv sync
+
+# Run annotation
+!uv run python run_annotation.py --input data/unlabeled.csv --output data/annotated.csv --concurrency 5 --limit 100
+
+# Download results
 from kaggle.api.kaggle_api_extended import KaggleApi
 api = KaggleApi()
 api.authenticate()
-
-# Download output
 api.dataset_download_file('your-username/your-dataset', 'annotated.csv')
 ```
 
@@ -122,20 +85,20 @@ Edit `config.yaml` to customize:
 
 ```bash
 # Annotate unlabeled reviews
-uv run python run.py --input data/unlabeled.csv --output data/annotated.csv
+uv run python run_annotation.py --input data/unlabeled.csv --output data/annotated.csv
 
 # Limit to first N samples
-uv run python run.py --input data/unlabeled.csv --output data/annotated.csv --limit 100
+uv run python run_annotation.py --input data/unlabeled.csv --output data/annotated.csv --limit 100
 
 # With custom concurrency
-uv run python run.py --input data/unlabeled.csv --output data/annotated.csv --concurrency 5
+uv run python run_annotation.py --input data/unlabeled.csv --output data/annotated.csv --concurrency 5
 ```
 
 ### 2. Relabel Existing Dataset
 
 ```bash
 # Relabel training set (compares with old labels)
-uv run python run.py --input data/train_labeled.csv --output data/train_relabeled.csv
+uv run python run_annotation.py --input data/train_labeled.csv --output data/train_relabeled.csv
 ```
 
 ## Output Format
