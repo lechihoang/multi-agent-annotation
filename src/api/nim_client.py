@@ -2,6 +2,8 @@
 NIM Client - simple wrapper around ChatOpenAI with NVIDIA NIM.
 """
 
+import asyncio
+import time
 import os
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -23,6 +25,7 @@ class NimClient:
         temperature: float = 0.0,
         max_tokens: int = 4096,
         max_retries: int = 5,
+        rate_limit: int = 40,
     ):
         self.llm = ChatOpenAI(
             model=model,
@@ -32,6 +35,9 @@ class NimClient:
             max_tokens=max_tokens,
             max_retries=max_retries,
         )
+        self._lock = asyncio.Lock()
+        self._min_interval = 60.0 / rate_limit
+        self._last_call = 0.0
 
     def _to_lc_messages(self, messages: list[dict]):
         return [
@@ -40,7 +46,15 @@ class NimClient:
             for m in messages
         ]
 
+    async def _rate_limit(self):
+        async with self._lock:
+            elapsed = time.time() - self._last_call
+            if elapsed < self._min_interval:
+                await asyncio.sleep(self._min_interval - elapsed)
+            self._last_call = time.time()
+
     async def chat(self, messages: list[dict]) -> str:
+        await self._rate_limit()
         response = await self.llm.ainvoke(self._to_lc_messages(messages))
         return response.content
 
@@ -51,6 +65,7 @@ class NimClient:
         temperature: float = None,
         max_tokens: int = None,
     ) -> BaseModel:
+        await self._rate_limit()
         kwargs = {"temperature": temperature} if temperature else {}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens

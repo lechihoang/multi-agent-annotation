@@ -1,6 +1,0 @@
-task_id,review,final_label,confidence,reached_agreement,agreement_round,reasoning
-056c6de7-cb17-49ae-bc9b-38e1dab9afe8,đặc mẫu xanh mà sao giao mẫu này vậy  cửa hàng ,1,0.9,True,1,Agents agreed at round 1
-4771c3fc-09a4-4905-b691-446a15a832b4,mình góp ý thật nhé.. đừng bắt phải đăng nhập zalo nữa mình muốn tải nhạc mà không được lấy lại tôi không zalo thì gửi tin nhắn mất tiền được mã kích hoạt lại không chính xác.. mình thấy 10 ngưòi thì họ khó chịu cả 10.. lập trình viên viết ra ứng dụng ngày càng dễ sử dụng đằng này càng ngày lại càng phức tạp và... bài đánh giá đầy đủ,1,0.9,True,1,Agents agreed at round 1
-f985883b-c585-4d85-94bd-db6e0174f3c7,gói hàng cẩn thận . chơi pubg với liên quân mượt với giá như này thì quá tốt,0,0.9,True,1,Agents agreed at round 1
-101c1f6e-697f-4f9a-ac62-60fe877cbf4a,"máy khá đẹp,pin trâu vân tay nhạy nhận diện khuôn mặt nhanh nói chung ổn.tuy chơi game frE fire bị chậm khung hình không mượt lắm nhưng với giá giẫm ngày 1111 được aD mã giảm giá 200k còn hơn 2tr6 thì vậy là ngon rồi",1,0.9,True,1,Agents agreed at round 1
-08247f3a-cac6-4970-be92-1aecd4c3aa2c,"một mớ lỗi: không xem lại được bài test, không hiện link( ví dụ như là youtube khi chia sẻ) không copy được từ không biết để dịch. làm ơn cho về bản web đi",1,0.9,True,1,Agents agreed at round 1

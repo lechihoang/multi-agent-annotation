@@ -57,7 +57,7 @@ os.environ["NVIDIA_API_KEY"] = "your-api-key-here"  # Or use Kaggle Secrets
 !uv sync
 
 # Run annotation
-!uv run python run_annotation.py --input data/unlabeled.csv --output data/annotated.csv --concurrency 5 --limit 100
+!uv run python run_annotation.py --input data/unlabeled.csv --output data/annotated.csv --concurrency 5
 
 # Download results
 from kaggle.api.kaggle_api_extended import KaggleApi
