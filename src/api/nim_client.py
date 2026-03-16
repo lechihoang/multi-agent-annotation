@@ -33,11 +33,12 @@ class NimClient:
             base_url=base_url,
             temperature=temperature,
             max_tokens=max_tokens,
-            max_retries=max_retries,
+            max_retries=0,  # Handle retries manually
         )
         self._lock = asyncio.Lock()
-        self._min_interval = 60.0 / rate_limit
+        self._min_interval = 60.0 / rate_limit * 1.5  # Conservative: 2/3 of limit
         self._last_call = 0.0
+        self._max_retries = max_retries
 
     def _to_lc_messages(self, messages: list[dict]):
         return [
@@ -55,8 +56,17 @@ class NimClient:
 
     async def chat(self, messages: list[dict]) -> str:
         await self._rate_limit()
-        response = await self.llm.ainvoke(self._to_lc_messages(messages))
-        return response.content
+
+        last_error = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = await self.llm.ainvoke(self._to_lc_messages(messages))
+                return response.content
+            except Exception as e:
+                last_error = e
+                await asyncio.sleep(2 ** attempt)
+
+        raise last_error
 
     async def chat_structured(
         self,
@@ -66,12 +76,26 @@ class NimClient:
         max_tokens: int = None,
     ) -> BaseModel:
         await self._rate_limit()
-        kwargs = {"temperature": temperature} if temperature else {}
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
 
-        structured_llm = self.llm.with_structured_output(response_model)
-        return await structured_llm.ainvoke(self._to_lc_messages(messages), **kwargs)
+        # Manual retry with exponential backoff and increasing max_tokens
+        last_error = None
+        current_max_tokens = max_tokens or self.llm.max_tokens
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                kwargs = {"temperature": temperature} if temperature else {}
+                kwargs["max_tokens"] = current_max_tokens
+
+                structured_llm = self.llm.with_structured_output(response_model)
+                return await structured_llm.ainvoke(self._to_lc_messages(messages), **kwargs)
+            except Exception as e:
+                last_error = e
+                err_str = str(e).lower()
+                if "length" in err_str:
+                    current_max_tokens = int(current_max_tokens * 1.5)
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+
+        raise last_error
 
 
 _nim_client = None
