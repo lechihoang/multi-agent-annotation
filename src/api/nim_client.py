@@ -101,7 +101,7 @@ class NimClient:
                     logger.warning(f"Retry {attempt + 1}/{self._max_retries + 1} (429): {e}")
                 else:
                     logger.warning(f"Retry {attempt + 1}/{self._max_retries + 1}: {e}")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                await asyncio.sleep(30 * (2 ** attempt))  # First: 30s, then double
 
         raise last_error
 
