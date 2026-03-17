@@ -2,10 +2,8 @@
 # DREAM: Debate-based RElevance Assessment with Multi-agents
 # Based on: arXiv:2602.06526 - Completing Missing Annotation
 #
-# Key features:
-# 1. Opposing Stance Initialization: Two agents with opposing stances
-# 2. Multi-Round Debating with Reciprocal Critique
-# 3. Agreement-based Human Escalation (or LLM Adjudication)
+# Prompt design adapted from paper for Vietnamese complaint detection.
+# Output uses Pydantic (not JSON) for structured parsing.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -38,65 +36,116 @@ task:
 # ---------------------------------------------------------------------------
 dream:
   enabled: true
-  
+
   # ── Debate Parameters ─────────────────────────────────────────────────
   debate:
     max_rounds: 2           # Paper: R=2 is optimal (Section 3.2.2)
     num_agents: 2           # 2 agents with opposing stances
     temperature: 0.0        # Deterministic output
-    
-  # ── Complaint Guidelines (theo paper + adapted for complaint detection) ───
+
+  # ── Guidelines (adapted from paper Table 27) ─────────────────────────
+  # 8 criteria adapted for Vietnamese complaint detection
   guidelines: |
     <guide>
-    1. Label 1 (COMPLAINT): Review thể hiện sự không hài lòng, đề xuất cải thiện, mong muốn, hoặc cảnh báo.
-    2. Label 0 (NON-COMPLAINT): Review chỉ khen ngợi thuần túy, thể hiện sự hài lòng HOẶC chỉ là insult/hate speech không có constructive intent.
-    3. Đánh giá DỰA TRÊN NỘI DUNG: có constructive intent (đề xuất, phàn nàn, mong muốn) mới là Label 1.
-    4. Khen + chê = xem xét có constructive intent không? CÓ mới Label 1.
+    1. Label 1 (COMPLAINT): Review thể hiện sự không hài lòng (dissatisfaction), đề xuất cải thiện (suggestion), mong muốn (wish), hoặc cảnh báo (warning).
+
+    2. Label 0 (NON-COMPLAINT): Review chỉ khen ngợi thuần túy, thể hiện sự hài lòng (satisfaction) HOẶC chỉ là insult/hate speech không có constructive intent.
+
+    3. Đánh giá DỰA TRÊN NỘI DUNG: Có constructive intent (đề xuất, phàn nàn, mong muốn, cảnh báo) mới là Label 1.
+
+    4. Mixed content (khen + chê): Xem xét có constructive intent không? Nếu CÓ → Label 1.
+
+    5. Không đánh giá tính đúng đắn của nội dung, chỉ đánh giá intent.
+
+    6. Câu hỏi hoặc câu trả lời không phải complaint trừ khi thể hiện mong muốn/đề xuất cụ thể.
+
+    7. Đánh giá ĐỘC LẬP từng câu trong review.
+
+    8. Quyết định dựa trên nội dung review, không dựa trên surface-level similarity.
     </guide>
 
-  # ── Agent System Messages (Opposing Stances) ──────────────────────────
+  # ── Agent System Messages (adapted from paper Table 27) ───────────────
 
   # Agent 1: Pro-Complaint (Initial stance: Label 1)
   agent_complaint_system: |
-    Bạn là Agent_A - chuyên gia phân tích complaint tiếng Việt.
-    **STANCE BAN ĐẦU**: Label 1 (COMPLAINT)
+    Bạn là Agent_Complaint - chuyên gia phân tích complaint trong review tiếng Việt.
+    Nhiệm vụ: Xác định review có phải là COMPLAINT (Label 1) hay không (Label 0).
+    Có một Agent khác là Agent_NonComplaint cùng thực hiện nhiệm vụ này.
+    Hai agent sẽ tranh luận với nhau để đi đến thống nhất.
     {guidelines}
-    Trả lời ngắn gọn: Evidence, Argument, Label.
+    Bạn có thể giữ hoặc THAY ĐỔI stance ban đầu nếu bị thuyết phục.
 
   # Agent 2: Pro-Non-Complaint (Initial stance: Label 0)
   agent_non_complaint_system: |
-    Bạn là Agent_B - chuyên gia phân tích complaint tiếng Việt.
-    **STANCE BAN ĐẦU**: Label 0 (NON-COMPLAINT)
+    Bạn là Agent_NonComplaint - chuyên gia phân tích complaint trong review tiếng Việt.
+    Nhiệm vụ: Xác định review có phải là COMPLAINT (Label 1) hay không (Label 0).
+    Có một Agent khác là Agent_Complaint cùng thực hiện nhiệm vụ này.
+    Hai agent sẽ tranh luận với nhau để đi đến thống nhất.
     {guidelines}
-    Trả lời ngắn gọn: Evidence, Argument, Label.
+    Bạn có thể giữ hoặc THAY ĐỔI stance ban đầu nếu bị thuyết phục.
 
-  # ── Adjudicator (LLM or Human) ────────────────────────────────────────
-  adjudicator_system: |
-    Bạn là THẨM PHÁN. Đọc lịch sử tranh luận, đưa ra quyết định cuối cùng.
-    {guidelines}
-    Trả lời: final_label, confidence, reasoning.
+  # ── User Prompt Templates (adapted from paper) ─────────────────────────
 
-  # ── User Prompt Templates ────────────────────────────────────────────
-  # Template for agent user prompt
+  # First round prompt - adapted from paper Table 27
   agent_user_template: |
-    Review: {review}
-    Stance hiện tại: Label {stance}
-    Có thể giữ hoặc THAY ĐỔI stance nếu bị thuyết phục.
-    Trả lời: Evidence, Argument, Label.
+    Review cần phân tích:
+    {review}
 
-  # Template for subsequent rounds (with history)
+    Nhiệm vụ: Xác định review trên là COMPLAINT (Label 1) hay NON-COMPLAINT (Label 0).
+
+    Stance hiện tại của bạn: Label {stance}
+    - Label 1 = COMPLAINT: thể hiện sự không hài lòng, đề xuất, mong muốn, cảnh báo
+    - Label 0 = NON-COMPLAINT: chỉ khen ngợi, hài lòng, hoặc insult không có constructive intent
+
+    Hướng dẫn: {guidelines}
+
+    Phân tích review và đưa ra quyết định. Bạn có thể giữ hoặc THAY ĐỔI stance hiện tại nếu phân tích cho thấy stance khác đúng hơn.
+
+    Trả lời theo mẫu Pydantic: evidence (trích dẫn từ review), argument (lập luận), label (0 hoặc 1).
+
+  # Subsequent rounds prompt - adapted from paper Table 28
   agent_roundN_template: |
-    Review: {review}
-    Stance hiện tại: Label {stance}
-    Lịch sử: {history}
-    Phản bác hoặc thừa nhận. Có thể giữ hoặc THAY ĐỔI stance.
-    Trả lời: Evidence, Argument, Label.
+    Review cần phân tích:
+    {review}
 
-  # Template for adjudicator user prompt
+    Lịch sử tranh luận từ vòng trước:
+    {history}
+
+    Nhiệm vụ: Xác định review trên là COMPLAINT (Label 1) hay NON-COMPLAINT (Label 0).
+
+    Stance hiện tại của bạn: Label {stance}
+    - Label 1 = COMPLAINT: thể hiện sự không hài lòng, đề xuất, mong muốn, cảnh báo
+    - Label 0 = NON-COMPLAINT: chỉ khen ngợi, hài lòng, hoặc insult không có constructive intent
+
+    Hướng dẫn: {guidelines}
+
+    Đọc lịch sử tranh luận, phản bác hoặc thừa nhận lập luận của Agent kia.
+    Bạn có thể giữ hoặc THAY ĐỔI stance hiện tại nếu bị thuyết phục.
+
+    Trả lời theo mẫu Pydantic: evidence (trích dẫn từ review), argument (lập luận có tham chiếu đến lịch sử), label (0 hoặc 1).
+
+  # ── Adjudicator Prompt (adapted from paper Table 29) ───────────────────
+
+  adjudicator_system: |
+    Bạn là THẨM PHÁN - chuyên gia phân tích complaint trong review tiếng Việt.
+    Nhiệm vụ: Đọc lịch sử tranh luận giữa hai Agent và đưa ra quyết định cuối cùng.
+    {guidelines}
+    Đánh giá chất lượng lập luận của từng Agent, sau đó đưa ra quyết định của riêng bạn.
+    Confidence: mức độ chắc chắn của quyết định (0.0-1.0).
+
   adjudicator_user_template: |
-    Review: {review}
-    Lịch sử tranh luận: {history}
-    Hai Agent không đồng ý. Quyết định: final_label, confidence, reasoning.
+    Review cần phân tích:
+    {review}
+
+    Lịch sử tranh luận giữa hai Agent:
+    {history}
+
+    Hai Agent không đồng ý với nhau. Bạn là Thẩm Phán, hãy đọc lịch sử tranh luận,
+    đánh giá lập luận của từng Agent, và đưa ra quyết định cuối cùng.
+
+    Hướng dẫn: {guidelines}
+
+    Trả lời theo mẫu Pydantic: final_label (0 hoặc 1), confidence (0.0-1.0), reasoning (lập luận).
 
   # ── LLM Settings for DREAM ───────────────────────────────────────────
   llm:

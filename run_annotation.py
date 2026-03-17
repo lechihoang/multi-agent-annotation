@@ -32,15 +32,15 @@ DATA_DIR = Path("data")
 
 
 def load_done_reviews(output_path: Path) -> set[str]:
-    """Đọc các review đã annotated từ output file (để resume)."""
+    """Đọc các task_id đã annotated từ output file (để resume)."""
     if not output_path.exists():
         return set()
     done = set()
     with open(output_path, encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
-            review = row.get("review", "").strip()
-            if review and row.get("final_label", ""):
-                done.add(review)
+            task_id = row.get("task_id", "").strip()
+            if task_id and row.get("final_label", ""):
+                done.add(task_id)
     logger.info(f"Resume: found {len(done)} already annotated in {output_path}")
     return done
 
@@ -54,9 +54,9 @@ def load_input_csv(path: Path) -> tuple[list[str], list[str]]:
         id_col = next((c for c in cols if c.lower() in ["id", "task_id"]), None)
         if not text_col:
             raise ValueError(f"Cannot find text column in {path}. Columns: {cols}")
-        for row in reader:
+        for idx, row in enumerate(reader):
             texts.append(row[text_col])
-            ids.append(row.get(id_col, str(uuid.uuid4())) if id_col else str(uuid.uuid4()))
+            ids.append(str(idx))  # Use row index as deterministic ID
     return texts, ids
 
 
@@ -64,7 +64,10 @@ def append_result_csv(result: DreamResult, path: Path):
     """Ghi ngay từng kết quả vào file (append mode)."""
     fieldnames = [
         "task_id", "review", "final_label", "confidence",
-        "reached_agreement", "agreement_round", "reasoning"
+        "reached_agreement", "agreement_round", "reasoning",
+        "relevant_argument", "relevant_evidence",
+        "irrelevant_argument", "irrelevant_evidence",
+        "adjudicator_reasoning",
     ]
     write_header = not path.exists()
     with open(path, "a", encoding="utf-8", newline="") as f:
@@ -79,6 +82,11 @@ def append_result_csv(result: DreamResult, path: Path):
             "reached_agreement": result.reached_agreement,
             "agreement_round": result.agreement_round or "",
             "reasoning": result.reasoning,
+            "relevant_argument": result.relevant_argument,
+            "relevant_evidence": result.relevant_evidence,
+            "irrelevant_argument": result.irrelevant_argument,
+            "irrelevant_evidence": result.irrelevant_evidence,
+            "adjudicator_reasoning": result.adjudicator_reasoning,
         })
 
 
@@ -99,7 +107,8 @@ async def annotate_all(
         nonlocal completed, errors
         async with semaphore:
             try:
-                results[i] = await annotate_with_dream(text, tid)
+                result = await annotate_with_dream(text, tid)
+                results[i] = result
             except Exception as e:
                 logger.error(f"[{i}] Error: {e}")
                 results[i] = DreamResult(
@@ -112,16 +121,14 @@ async def annotate_all(
                 )
                 errors += 1
             finally:
+                result = results[i]
+                if result:
+                    append_result_csv(result, output_path)
                 completed += 1
-                append_result_csv(results[i], output_path)
-
                 elapsed = time.monotonic() - start
                 rate = completed / elapsed * 60 if elapsed > 0 else 0
                 done_total = total_in_file + completed
-
-                # Stats for this batch
-                agreements = sum(1 for r in results[:completed] if r and r.reached_agreement)
-
+                agreements = sum(1 for r in results if r and r.reached_agreement)
                 logger.info(
                     f"Annotated {done_total} | batch: {completed}/{len(texts)} "
                     f"| errors: {errors} | agree: {agreements}/{completed} | "
@@ -136,7 +143,7 @@ async def main():
     parser = argparse.ArgumentParser(description="DREAM Annotation Pipeline")
     parser.add_argument("--input", type=Path, default=DATA_DIR / "unlabeled.csv")
     parser.add_argument("--output", type=Path, default=DATA_DIR / "annotated.csv")
-    parser.add_argument("--concurrency", type=int, default=5, help="Max concurrent annotations")
+    parser.add_argument("--concurrency", type=int, default=1, help="Max concurrent annotations")
     parser.add_argument("--limit", type=int, default=0, help="Limit rows to process (0=all)")
     parser.add_argument("--verbose", action="store_true", help="Print debug logs")
     args = parser.parse_args()
@@ -161,7 +168,7 @@ async def main():
     logger.info(f"Input total: {len(texts)}")
 
     # Filter out already done
-    pending = [(t, i) for t, i in zip(texts, ids) if t.strip() not in done_reviews]
+    pending = [(t, i) for t, i in zip(texts, ids) if i.strip() not in done_reviews]
     logger.info(f"Pending:     {len(pending)} (skipped {len(texts) - len(pending)} already done)")
 
     if args.limit > 0:

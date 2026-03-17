@@ -65,3 +65,10 @@ class DreamResult(BaseModel):
         default=None,
         description="Adjudication result if used"
     )
+
+    # Agent arguments (full, for debugging)
+    relevant_argument: str = Field(default="", description="Agent_Relevant final argument (pro Label 1)")
+    relevant_evidence: str = Field(default="", description="Agent_Relevant evidence")
+    irrelevant_argument: str = Field(default="", description="Agent_Irrelevant final argument (pro Label 0)")
+    irrelevant_evidence: str = Field(default="", description="Agent_Irrelevant evidence")
+    adjudicator_reasoning: str = Field(default="", description="Adjudicator reasoning if used")

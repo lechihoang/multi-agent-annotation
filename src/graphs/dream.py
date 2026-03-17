@@ -7,6 +7,7 @@ Based on: arXiv:2602.06526 - Completing Missing Annotation
 """
 
 import csv
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -75,6 +76,13 @@ async def annotate_with_dream(
             confidence = 0.9
             reasoning = f"Agents agreed at round {agreement_round}"
 
+            # Get final arguments from last round
+            last_round = debate_rounds[-1] if debate_rounds else None
+            rel_arg = last_round.relevant_turn.argument if last_round else ""
+            rel_evi = last_round.relevant_turn.evidence if last_round else ""
+            irr_arg = last_round.irrelevant_turn.argument if last_round else ""
+            irr_evi = last_round.irrelevant_turn.evidence if last_round else ""
+
             return DreamResult(
                 task_id=task_id,
                 review=review,
@@ -85,6 +93,10 @@ async def annotate_with_dream(
                 agreement_round=agreement_round,
                 debate_rounds=debate_rounds,
                 used_adjudicator=False,
+                relevant_argument=rel_arg,
+                relevant_evidence=rel_evi,
+                irrelevant_argument=irr_arg,
+                irrelevant_evidence=irr_evi,
             )
         else:
             # Disagreement: use adjudicator
@@ -97,6 +109,13 @@ async def annotate_with_dream(
                     config=config,
                 )
 
+                # Get final arguments from last round
+                last_round = debate_rounds[-1] if debate_rounds else None
+                rel_arg = last_round.relevant_turn.argument if last_round else ""
+                rel_evi = last_round.relevant_turn.evidence if last_round else ""
+                irr_arg = last_round.irrelevant_turn.argument if last_round else ""
+                irr_evi = last_round.irrelevant_turn.evidence if last_round else ""
+
                 return DreamResult(
                     task_id=task_id,
                     review=review,
@@ -107,6 +126,11 @@ async def annotate_with_dream(
                     debate_rounds=debate_rounds,
                     used_adjudicator=True,
                     adjudication=adjudication,
+                    relevant_argument=rel_arg,
+                    relevant_evidence=rel_evi,
+                    irrelevant_argument=irr_arg,
+                    irrelevant_evidence=irr_evi,
+                    adjudicator_reasoning=adjudication.reasoning,
                 )
             else:
                 # Human escalation not implemented

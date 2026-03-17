@@ -33,21 +33,45 @@ def _build_user_prompt(
     history: List[DebateTurn],
     config,
 ) -> str:
-    """Build user prompt for debate turn."""
+    """Build user prompt for debate turn.
+
+    History format adapted from paper:
+    - Paper uses: AgentA: Yes. ... AgentB: No. ...
+    - We format: Agent_Complaint: argument + evidence, Agent_NonComplaint: argument + evidence
+    """
     target_label = "1" if stance == "relevant" else "0"
 
     if not history:
         # First round - use template from config
         template = config.dream.agent_user_template
-        return template.format(review=review, stance=target_label)
+        # Include guidelines in the prompt
+        return template.format(
+            review=review,
+            stance=target_label,
+            guidelines=config.dream.guidelines
+        )
     else:
         # Subsequent rounds - use roundN template
         template = config.dream.agent_roundN_template
-        history_str = "\n\n".join([
-            f"**{turn.agent}** (Label {turn.label}):\n{turn.argument}\nEvidence: {turn.evidence}"
-            for turn in history
-        ])
-        return template.format(review=review, stance=target_label, history=history_str)
+
+        # Format history following paper style: include both agents' positions
+        # Group turns by pairs (relevant, irrelevant)
+        history_parts = []
+        for turn in history:
+            label_desc = "COMPLAINT (Label 1)" if turn.label == "1" else "NON-COMPLAINT (Label 0)"
+            history_parts.append(
+                f"{turn.agent} ({label_desc}):\n"
+                f"  Evidence: {turn.evidence}\n"
+                f"  Argument: {turn.argument}"
+            )
+        history_str = "\n\n".join(history_parts)
+
+        return template.format(
+            review=review,
+            stance=target_label,
+            history=history_str,
+            guidelines=config.dream.guidelines
+        )
 
 
 async def run_agent_turn(
@@ -111,7 +135,11 @@ async def run_adjudicator(
         guidelines=config.dream.guidelines
     )
     template = config.dream.adjudicator_user_template
-    user_prompt = template.format(review=review, history=history_str)
+    user_prompt = template.format(
+        review=review,
+        history=history_str,
+        guidelines=config.dream.guidelines
+    )
 
     messages = [
         {"role": "system", "content": system_prompt},

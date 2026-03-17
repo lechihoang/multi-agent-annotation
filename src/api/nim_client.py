@@ -5,6 +5,7 @@ NIM Client - simple wrapper around ChatOpenAI with NVIDIA NIM.
 import asyncio
 import time
 import os
+from loguru import logger
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
@@ -24,7 +25,7 @@ class NimClient:
         base_url: str = BASE_URL,
         temperature: float = 0.0,
         max_tokens: int = 4096,
-        max_retries: int = 5,
+        max_retries: int = 10,
         rate_limit: int = 40,
     ):
         self.llm = ChatOpenAI(
@@ -64,7 +65,8 @@ class NimClient:
                 return response.content
             except Exception as e:
                 last_error = e
-                await asyncio.sleep(2 ** attempt)
+                logger.warning(f"Retry {attempt + 1}/{self._max_retries + 1}: {e}")
+                await asyncio.sleep(30 * (2 ** attempt))  # First: 30s, then double
 
         raise last_error
 
@@ -93,6 +95,12 @@ class NimClient:
                 err_str = str(e).lower()
                 if "length" in err_str:
                     current_max_tokens = int(current_max_tokens * 1.5)
+                    logger.warning(f"Retry {attempt + 1}/{self._max_retries + 1} (length): {e}")
+                # Retry on rate limit (429)
+                elif "429" in err_str or "rate limit" in err_str or "too many requests" in err_str:
+                    logger.warning(f"Retry {attempt + 1}/{self._max_retries + 1} (429): {e}")
+                else:
+                    logger.warning(f"Retry {attempt + 1}/{self._max_retries + 1}: {e}")
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
 
         raise last_error
