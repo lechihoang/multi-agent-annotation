@@ -143,7 +143,7 @@ async def main():
     parser = argparse.ArgumentParser(description="DREAM Annotation Pipeline")
     parser.add_argument("--input", type=Path, default=DATA_DIR / "unlabeled.csv")
     parser.add_argument("--output", type=Path, default=DATA_DIR / "annotated.csv")
-    parser.add_argument("--concurrency", type=int, default=1, help="Max concurrent annotations")
+    parser.add_argument("--concurrency", type=int, default=2, help="Max concurrent annotations")
     parser.add_argument("--limit", type=int, default=0, help="Limit rows to process (0=all)")
     parser.add_argument("--verbose", action="store_true", help="Print debug logs")
     args = parser.parse_args()
