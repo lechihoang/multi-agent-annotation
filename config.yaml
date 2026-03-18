@@ -28,8 +28,13 @@ task:
   label_column: "label"
 
   labels:
-    "0": "Non-complaint — Pure praise, satisfaction, OR insult/hate speech WITHOUT constructive intent."
-    "1": "Complaint — Dissatisfaction, suggestion, wish, warning, OR mixed (praise+criticism) WITH constructive intent."
+    # viOCD Paper (Section 3.1) - Định nghĩa chính xác:
+    # Nhãn 1 (PHÀN NÀN): Thể hiện sự không hài lòng giữa thực tế và kỳ vọng,
+    #                      thường kèm theo mong muốn được giải quyết. Có thể bao gồm cảnh báo,
+    #                      đe dọa, đề xuất, hoặc lời khuyên. PHẢI CÓ MỤC ĐÍCH XÂY DỰNG.
+    # Nhãn 0 (KHÔNG PHÀN NÀN): Khen ngợi, ca ngợi, thể hiện sự hài lòng, HOẶC insult không có mục đích xây dựng.
+    "0": "Không phàn nàn — Khen ngợi, ca ngợi, sự hài lòng, HOẶC chửi mắng không có đề xuất cải thiện."
+    "1": "Phàn nàn — Sự không hài lòng giữa thực tế và kỳ vọng, mong muốn được giải quyết. Có thể bao gồm cảnh báo, đe dọa, đề xuất, hoặc lời khuyên. PHẢI CÓ MỤC ĐÍCH XÂY DỰNG."
 
 # ---------------------------------------------------------------------------
 # DREAM Configuration (Multi-Agent Debate)
@@ -43,67 +48,73 @@ dream:
     num_agents: 2           # 2 agents with opposing stances
     temperature: 0.0        # Deterministic output
 
-  # ── Guidelines (adapted from paper Table 27) ─────────────────────────
-  # 8 criteria adapted for Vietnamese complaint detection
+  # ── Guidelines (theo viOCD Paper Section 3.1) ───────────────────────────
+  # Hoàn toàn tiếng Việt
   guidelines: |
-    <guide>
-    1. Label 1 (COMPLAINT): Review thể hiện sự không hài lòng (dissatisfaction), đề xuất cải thiện (suggestion), mong muốn (wish), hoặc cảnh báo (warning).
+    <huong_dan>
+    1. Nhãn 1 (PHÀN NÀN): Review THỂ HIỆN SỰ KHÔNG HÀI LÒNG giữa thực tế và kỳ vọng,
+       thường kèm theo MONG MUỐN ĐƯỢC GIẢI QUYẾT. Có thể bao gồm cảnh báo, đe dọa,
+       đề xuất, hoặc lời khuyên. PHẢI CÓ MỤC ĐÍCH XÂY DỰNG, không phải chửi bới.
 
-    2. Label 0 (NON-COMPLAINT): Review chỉ khen ngợi thuần túy, thể hiện sự hài lòng (satisfaction) HOẶC chỉ là insult/hate speech không có constructive intent.
+    2. Nhãn 0 (KHÔNG PHÀN NÀN): Review chỉ khen ngợi, thể hiện sự hài lòng,
+       HOẶC chỉ chửi mắng mà KHÔNG CÓ đề xuất cải thiện.
 
-    3. Đánh giá DỰA TRÊN NỘI DUNG: Có constructive intent (đề xuất, phàn nàn, mong muốn, cảnh báo) mới là Label 1.
+    3. Mục đích xây dựng là quan trọng nhất: Chỉ có đề xuất, phàn nàn, mong muốn,
+       cảnh báo với mục đích xây dựng mới là Nhãn 1.
 
-    4. Mixed content (khen + chê): Xem xét có constructive intent không? Nếu CÓ → Label 1.
+    4. Nội dung lẫn lộn (khen + chê): Xem xét có mục đích xây dựng không?
+       Nếu CÓ (có đề xuất/mong muốn cải thiện) → Nhãn 1.
 
-    5. Không đánh giá tính đúng đắn của nội dung, chỉ đánh giá intent.
+    5. Chửi mắng không có đề xuất = Nhãn 0: Chỉ chửi mắng, nói xấu
+       mà không đề xuất gì = Không phàn nàn.
 
-    6. Câu hỏi hoặc câu trả lời không phải complaint trừ khi thể hiện mong muốn/đề xuất cụ thể.
+    6. Không đánh giá tính đúng đắn của nội dung, chỉ đánh giá mục đích.
 
-    7. Đánh giá ĐỘC LẬP từng câu trong review.
+    7. Câu hỏi hoặc câu trả lời không phải phàn nàn trừ khi thể hiện mong muốn/đề xuất cụ thể.
 
-    8. Quyết định dựa trên nội dung review, không dựa trên surface-level similarity.
-    </guide>
+    8. Đánh giá toàn bộ review, không phải từng câu riêng lẻ.
+    </huong_dan>
 
-  # ── Agent System Messages (adapted from paper Table 27) ───────────────
+  # ── Agent System Messages ────────────────────────────────────────────────
 
-  # Agent 1: Pro-Complaint (Initial stance: Label 1)
+  # Agent A: Ủng hộ phàn nàn (ban đầu: Nhãn 1)
   agent_complaint_system: |
-    Bạn là Agent_Complaint - chuyên gia phân tích complaint trong review tiếng Việt.
-    Nhiệm vụ: Xác định review có phải là COMPLAINT (Label 1) hay không (Label 0).
-    Có một Agent khác là Agent_NonComplaint cùng thực hiện nhiệm vụ này.
+    Bạn là Agent_A - chuyên gia phân tích phàn nàn trong review tiếng Việt.
+    Nhiệm vụ: Xác định review là PHÀN NÀN (Nhãn 1) hay KHÔNG PHÀN NÀN (Nhãn 0).
+    Có một Agent khác là Agent_B cùng thực hiện nhiệm vụ này.
     Hai agent sẽ tranh luận với nhau để đi đến thống nhất.
     {guidelines}
-    Bạn có thể giữ hoặc THAY ĐỔI stance ban đầu nếu bị thuyết phục.
+    Bạn có thể giữ hoặc THAY ĐỔI quan điểm ban đầu nếu bị thuyết phục.
 
-  # Agent 2: Pro-Non-Complaint (Initial stance: Label 0)
+  # Agent B: Ủng hộ không phàn nàn (ban đầu: Nhãn 0)
   agent_non_complaint_system: |
-    Bạn là Agent_NonComplaint - chuyên gia phân tích complaint trong review tiếng Việt.
-    Nhiệm vụ: Xác định review có phải là COMPLAINT (Label 1) hay không (Label 0).
-    Có một Agent khác là Agent_Complaint cùng thực hiện nhiệm vụ này.
+    Bạn là Agent_B - chuyên gia phân tích phàn nàn trong review tiếng Việt.
+    Nhiệm vụ: Xác định review là PHÀN NÀN (Nhãn 1) hay KHÔNG PHÀN NÀN (Nhãn 0).
+    Có một Agent khác là Agent_A cùng thực hiện nhiệm vụ này.
     Hai agent sẽ tranh luận với nhau để đi đến thống nhất.
     {guidelines}
-    Bạn có thể giữ hoặc THAY ĐỔI stance ban đầu nếu bị thuyết phục.
+    Bạn có thể giữ hoặc THAY ĐỔI quan điểm ban đầu nếu bị thuyết phục.
 
-  # ── User Prompt Templates (adapted from paper) ─────────────────────────
+  # ── User Prompt Templates ────────────────────────────────────────────────
 
-  # First round prompt - adapted from paper Table 27
+  # Vòng đầu tiên
   agent_user_template: |
     Review cần phân tích:
     {review}
 
-    Nhiệm vụ: Xác định review trên là COMPLAINT (Label 1) hay NON-COMPLAINT (Label 0).
+    Nhiệm vụ: Xác định review trên là PHÀN NÀN (Nhãn 1) hay KHÔNG PHÀN NÀN (Nhãn 0).
 
-    Stance hiện tại của bạn: Label {stance}
-    - Label 1 = COMPLAINT: thể hiện sự không hài lòng, đề xuất, mong muốn, cảnh báo
-    - Label 0 = NON-COMPLAINT: chỉ khen ngợi, hài lòng, hoặc insult không có constructive intent
+    Quan điểm hiện tại của bạn: Nhãn {stance}
+    - Nhãn 1 = PHÀN NÀN: thể hiện sự không hài lòng, đề xuất, mong muốn, cảnh báo
+    - Nhãn 0 = KHÔNG PHÀN NÀN: chỉ khen ngợi, hài lòng, hoặc chửi mắng không có đề xuất
 
     Hướng dẫn: {guidelines}
 
-    Phân tích review và đưa ra quyết định. Bạn có thể giữ hoặc THAY ĐỔI stance hiện tại nếu phân tích cho thấy stance khác đúng hơn.
+    Phân tích review và đưa ra quyết định. Bạn có thể giữ hoặc THAY ĐỔI quan điểm hiện tại nếu phân tích cho thấy quan điểm khác đúng hơn.
 
     Trả lời theo mẫu Pydantic: evidence (trích dẫn từ review), argument (lập luận), label (0 hoặc 1).
 
-  # Subsequent rounds prompt - adapted from paper Table 28
+  # Các vòng tiếp theo
   agent_roundN_template: |
     Review cần phân tích:
     {review}
@@ -111,23 +122,23 @@ dream:
     Lịch sử tranh luận từ vòng trước:
     {history}
 
-    Nhiệm vụ: Xác định review trên là COMPLAINT (Label 1) hay NON-COMPLAINT (Label 0).
+    Nhiệm vụ: Xác định review trên là PHÀN NÀN (Nhãn 1) hay KHÔNG PHÀN NÀN (Nhãn 0).
 
-    Stance hiện tại của bạn: Label {stance}
-    - Label 1 = COMPLAINT: thể hiện sự không hài lòng, đề xuất, mong muốn, cảnh báo
-    - Label 0 = NON-COMPLAINT: chỉ khen ngợi, hài lòng, hoặc insult không có constructive intent
+    Quan điểm hiện tại của bạn: Nhãn {stance}
+    - Nhãn 1 = PHÀN NÀN: thể hiện sự không hài lòng, đề xuất, mong muốn, cảnh báo
+    - Nhãn 0 = KHÔNG PHÀN NÀN: chỉ khen ngợi, hài lòng, hoặc chửi mắng không có đề xuất
 
     Hướng dẫn: {guidelines}
 
     Đọc lịch sử tranh luận, phản bác hoặc thừa nhận lập luận của Agent kia.
-    Bạn có thể giữ hoặc THAY ĐỔI stance hiện tại nếu bị thuyết phục.
+    Bạn có thể giữ hoặc THAY ĐỔI quan điểm hiện tại nếu bị thuyết phục.
 
     Trả lời theo mẫu Pydantic: evidence (trích dẫn từ review), argument (lập luận có tham chiếu đến lịch sử), label (0 hoặc 1).
 
-  # ── Adjudicator Prompt (adapted from paper Table 29) ───────────────────
+  # ── Thẩm phán (khi hai Agent không đồng ý) ─────────────────────────────
 
   adjudicator_system: |
-    Bạn là THẨM PHÁN - chuyên gia phân tích complaint trong review tiếng Việt.
+    Bạn là THẨM PHÁN - chuyên gia phân tích phàn nàn trong review tiếng Việt.
     Nhiệm vụ: Đọc lịch sử tranh luận giữa hai Agent và đưa ra quyết định cuối cùng.
     {guidelines}
     Đánh giá chất lượng lập luận của từng Agent, sau đó đưa ra quyết định của riêng bạn.
@@ -152,13 +163,17 @@ dream:
     temperature: 0.0  # DREAM uses deterministic output
     max_tokens: 4096
 
-  # ── Human Escalation ──────────────────────────────────────────────────
-  # DREAM: If agents disagree after max_rounds, escalate to human
-  # with debate history as supportive resource
+  # ── Human Escalation (DREAM Paper Section 3.1) ─────────────────────────
+  # If agents STILL disagree after max_rounds, escalate to human
+  # Human annotator receives: review + debate history (both agents' reasoning & evidence)
+  # This helps understand the source of disagreement for better judgment
   escalation:
-    enabled: true           # Enable human escalation for disagreements
-    use_llm_adjudicator: true  # Use LLM as adjudicator instead of human (faster)
+    enabled: true           # Enable escalation for disagreements
+    use_llm_adjudicator: true  # True = use LLM adjudicator first
+                               # If confidence < threshold, escalate to human
     adjudicator_model: null  # Use same model as agents if null
+    export_file: "data/escalated_for_human.csv"  # File to export cases needing human review
+    confidence_threshold: 0.7  # If adjudicator confidence < threshold, escalate to human
 
 # ---------------------------------------------------------------------------
 # Legacy MADISSE config (kept for backward compatibility)

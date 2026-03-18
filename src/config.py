@@ -82,6 +82,8 @@ class DreamEscalationConfig:
     enabled: bool = True  # Enable human escalation for disagreements
     use_llm_adjudicator: bool = True  # Use LLM as adjudicator instead of human
     adjudicator_model: Optional[str] = None  # Use same model as agents if null
+    export_file: str = "data/escalated_for_human.csv"  # File to export unresolved cases
+    confidence_threshold: float = 0.7  # If adjudicator confidence < threshold, escalate to human
 
 
 @dataclass
@@ -205,6 +207,8 @@ def load_config(path: str = "config.yaml") -> Config:
                 enabled=dream_escalation.get("enabled", True),
                 use_llm_adjudicator=dream_escalation.get("use_llm_adjudicator", True),
                 adjudicator_model=dream_escalation.get("adjudicator_model"),
+                export_file=dream_escalation.get("export_file", "data/escalated_for_human.csv"),
+                confidence_threshold=dream_escalation.get("confidence_threshold", 0.7),
             ),
         ),
         madisse=MadisseConfig(

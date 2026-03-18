@@ -170,16 +170,16 @@ async def run_debate_round(
     # Agent Relevant (starts with stance: relevant → label 1)
     relevant_turn = await run_agent_turn(
         review=review,
-        agent_name="Agent_Relevant",
+        agent_name="Agent_A",
         stance="relevant",
         history=previous_history,
         config=config,
     )
 
-    # Agent Irrelevant (starts with stance: irrelevant → label 0)
+    # Agent B (starts with stance: irrelevant → label 0)
     irrelevant_turn = await run_agent_turn(
         review=review,
-        agent_name="Agent_Irrelevant",
+        agent_name="Agent_B",
         stance="irrelevant",
         history=previous_history,
         config=config,
