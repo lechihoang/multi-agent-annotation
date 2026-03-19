@@ -32,9 +32,10 @@ task:
     # Nhãn 1 (PHÀN NÀN): Thể hiện sự không hài lòng giữa thực tế và kỳ vọng,
     #                      thường kèm theo mong muốn được giải quyết. Có thể bao gồm cảnh báo,
     #                      đe dọa, đề xuất, hoặc lời khuyên. PHẢI CÓ MỤC ĐÍCH XÂY DỰNG.
-    # Nhãn 0 (KHÔNG PHÀN NÀN): Khen ngợi, ca ngợi, thể hiện sự hài lòng, HOẶC insult không có mục đích xây dựng.
-    "0": "Không phàn nàn — Khen ngợi, ca ngợi, sự hài lòng, HOẶC chửi mắng không có đề xuất cải thiện."
-    "1": "Phàn nàn — Sự không hài lòng giữa thực tế và kỳ vọng, mong muốn được giải quyết. Có thể bao gồm cảnh báo, đe dọa, đề xuất, hoặc lời khuyên. PHẢI CÓ MỤC ĐÍCH XÂY DỰNG."
+    # Nhãn 0 (KHÔNG PHÀN NÀN): Khen ngợi, ca ngợi, thể hiện sự hài lòng,
+    #                          HOẶC insult/chửi mắng không có mục đích xây dựng.
+    "0": "Không phàn nàn — Khen ngợi, ca ngợi, hài lòng, HOẶC insult/chửi mắng không có mục đích xây dựng."
+    "1": "Phàn nàn — Sự không hài lòng thực tế vs kỳ vọng + mong muốn giải quyết + mục đích xây dựng (đề xuất/cảnh báo)."
 
 # ---------------------------------------------------------------------------
 # DREAM Configuration (Multi-Agent Debate)
@@ -52,27 +53,38 @@ dream:
   # Hoàn toàn tiếng Việt
   guidelines: |
     <huong_dan>
-    1. Nhãn 1 (PHÀN NÀN): Review THỂ HIỆN SỰ KHÔNG HÀI LÒNG giữa thực tế và kỳ vọng,
-       thường kèm theo MONG MUỐN ĐƯỢC GIẢI QUYẾT. Có thể bao gồm cảnh báo, đe dọa,
-       đề xuất, hoặc lời khuyên. PHẢI CÓ MỤC ĐÍCH XÂY DỰNG, không phải chửi bới.
+    ĐỊNH NGHĨA CHÍNH XÁC (theo viOCD Paper):
 
-    2. Nhãn 0 (KHÔNG PHÀN NÀN): Review chỉ khen ngợi, thể hiện sự hài lòng,
-       HOẶC chỉ chửi mắng mà KHÔNG CÓ đề xuất cải thiện.
+    Nhãn 1 (PHÀN NÀN): Review THỂ HIỆN SỰ KHÔNG HÀI LÒNG giữa thực tế và kỳ vọng,
+    kèm theo MONG MUỐN ĐƯỢC GIẢI QUYẾT. Có thể bao gồm cảnh báo, đe dọa,
+    đề xuất, hoặc lời khuyên. PHẢI MANG TÍNH XÂY DỰNG, không phải chửi bới.
 
-    3. Mục đích xây dựng là quan trọng nhất: Chỉ có đề xuất, phàn nàn, mong muốn,
-       cảnh báo với mục đích xây dựng mới là Nhãn 1.
+    Nhãn 0 (KHÔNG PHÀN NÀN): Khen ngợi, ca ngợi, thể hiện sự hài lòng,
+    HOẶC công kích/chửi mắng mà KHÔNG CÓ mục đích xây dựng (không đề xuất gì).
 
-    4. Nội dung lẫn lộn (khen + chê): Xem xét có mục đích xây dựng không?
-       Nếu CÓ (có đề xuất/mong muốn cải thiện) → Nhãn 1.
+    VÍ DỤ MINH HỌA:
 
-    5. Chửi mắng không có đề xuất = Nhãn 0: Chỉ chửi mắng, nói xấu
-       mà không đề xuất gì = Không phàn nàn.
+    1. "Tôi rất hài lòng với sản phẩm, cảm ơn shop. Mong shop phát triển tốt hơn." → Nhãn 0
+       (Câu cuối là MONG MUỐN NHƯNG KHÔNG gắn với sự không hài lòng. Chỉ là lời chúc tốt đẹp.)
 
-    6. Không đánh giá tính đúng đắn của nội dung, chỉ đánh giá mục đích.
+    2. "Hàng rất tốt nhưng giá đắt vì giao hàng quá lâu." → Nhãn 1
+       (Kết hợp khen + phàn nàn rõ ràng về giá và giao hàng → phàn nàn)
 
-    7. Câu hỏi hoặc câu trả lời không phải phàn nàn trừ khi thể hiện mong muốn/đề xuất cụ thể.
+    3. "Không hiểu lý do gì mà lừa đảo vậy?" → Nhãn 1
+       (Câu hỏi mang tính PHÀN NÀN/cảnh báo người khác)
 
-    8. Đánh giá toàn bộ review, không phải từng câu riêng lẻ.
+    4. "Game dở lắm, đừng tải game này." → Nhãn 0
+       (Công kích + cảnh báo nhưng KHÔNG có mục đích xây dựng, chỉ nói xấu)
+
+    5. "Tôi đã dùng 5 chai nước tẩy trang mà vẫn hài lòng." → Nhãn 0
+       (Khen ngợi, hài lòng)
+
+    QUY TẮC QUAN TRỌNG:
+    - Mục đích xây dựng là BẮT BUỘC cho Nhãn 1: phải có đề xuất/cảnh báo có ích
+    - Công kích/chửi mắng không kèm đề xuất = Nhãn 0
+    - Lời chúc/mong muốn tốt đẹp chung chung KHÔNG phải phàn nàn (Nhãn 0)
+    - Không đánh giá tính đúng đắn, chỉ đánh giá MỤC ĐÍCH của người viết
+    - Đánh giá toàn bộ review
     </huong_dan>
 
   # ── Agent System Messages ────────────────────────────────────────────────

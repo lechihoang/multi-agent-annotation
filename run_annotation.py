@@ -63,7 +63,7 @@ def load_input_csv(path: Path) -> tuple[list[str], list[str]]:
 def append_result_csv(result: DreamResult, path: Path):
     """Ghi ngay từng kết quả vào file (append mode)."""
     fieldnames = [
-        "task_id", "review", "final_label", "confidence",
+        "task_id", "review", "final_label", "confidence", "needs_human",
         "reached_agreement", "agreement_round", "reasoning",
         "relevant_argument", "relevant_evidence",
         "irrelevant_argument", "irrelevant_evidence",
@@ -79,6 +79,7 @@ def append_result_csv(result: DreamResult, path: Path):
             "review": result.review,
             "final_label": result.final_label,
             "confidence": result.confidence,
+            "needs_human": result.needs_human,
             "reached_agreement": result.reached_agreement,
             "agreement_round": result.agreement_round or "",
             "reasoning": result.reasoning,
