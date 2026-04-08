@@ -1,16 +1,11 @@
 """
-DREAM: Multi-Agent Debate Annotation
+DREAM — Multi-Agent Debate Annotation Runner.
 
 Usage:
-    uv run python run.py --input data/unlabeled.csv --output data/annotated.csv
-    uv run python run.py --input data/unlabeled.csv --concurrency 5 --limit 10
+  uv run python run.py --input data/ViCTSD_unlabeled.csv \
+    --output data/ViCTSD_annotated.csv --limit 5 --concurrency 2
 
-Based on: arXiv:2602.06526 - DREAM: Debate-based RElevance Assessment with Multi-agents
-
-Flow:
-  1. Two agents with OPPOSING STANCES debate (complaint vs non-complaint)
-  2. Multi-round reciprocal critique (R=2 rounds by default)
-  3. Agreement → use agreed label | Disagreement → LLM adjudicator
+Based on: arXiv:2602.06526 - DREAM: Multi-Agent Debate for NLP Classification
 """
 
 import argparse
@@ -19,7 +14,6 @@ import csv
 import time
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -27,175 +21,192 @@ load_dotenv()
 
 from loguru import logger
 
-from src.graphs import annotate_with_dream, DreamResult
 from src.config import get_config
+from src.pipeline import annotate, DreamResult
 
 DATA_DIR = Path("data")
 
 
-def load_done_indices(output_path: Path) -> set[int]:
-    """Load done indices from output file for resume."""
+def load_done_ids(output_path: Path) -> set[str]:
+    """Read task_ids already annotated (for resume)."""
     if not output_path.exists():
         return set()
     done = set()
     with open(output_path, encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            idx = row.get("idx", "")
-            if idx.isdigit():
-                done.add(int(idx))
-    logger.info(f"Resume: found {len(done)} already done in {output_path}")
+        for row in csv.DictReader(f):
+            tid = row.get("task_id", "").strip()
+            if tid and row.get("final_label", ""):
+                done.add(tid)
+    logger.info(f"Resume: {len(done)} already done in {output_path}")
     return done
 
 
-def load_input_csv(path: Path) -> list[dict]:
-    """Load input CSV with auto-detect columns."""
+def load_csv(path: Path, text_col: str):
+    """Load texts and IDs from CSV."""
+    texts, ids = [], []
     with open(path, encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        cols = reader.fieldnames or []
-        # Auto-detect text column
-        text_col = next((c for c in cols if c.lower() in ["review", "comment", "text", "content"]), None)
-        if not text_col:
-            raise ValueError(f"Cannot find text column in {path}. Columns: {cols}")
-        # Auto-detect index column
-        idx_col = next((c for c in cols if c.lower() in ["idx", "id", "index"]), None)
-
-        rows = []
-        for i, row in enumerate(reader):
-            rows.append({
-                "idx": row.get(idx_col, str(i)) if idx_col else str(i),
-                "text": row.get(text_col, ""),
-            })
-    return rows
+        for idx, row in enumerate(csv.DictReader(f)):
+            texts.append(row[text_col])
+            ids.append(str(uuid.uuid4()))
+    return texts, ids
 
 
-def append_result_csv(result: DreamResult, idx: str, path: Path):
-    """Append single result to CSV (immediate write)."""
-    fieldnames = ["idx", "review", "final_label", "confidence", "reached_agreement", "agreement_round", "reasoning"]
+def write_result(result: DreamResult, path: Path):
+    """Append one result to CSV."""
+    fieldnames = [
+        "task_id", "text", "final_label", "confidence",
+        "reasoning", "reached_agreement", "agreement_round",
+        "used_moderator", "used_adjudicator", "needs_human",
+        "moderator_agreements", "moderator_disagreements", "moderator_closer",
+        "adjudication_confidence", "adjudication_reasoning",
+        "agent_a_argument", "agent_a_evidence",
+        "agent_b_argument", "agent_b_evidence",
+        "debate_rounds_count",
+    ]
     write_header = not path.exists()
+
+    mod = result.moderator_summary
+    adj = result.adjudication
+
     with open(path, "a", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         if write_header:
             writer.writeheader()
         writer.writerow({
-            "idx": idx,
-            "review": result.review,
+            "task_id": result.task_id,
+            "text": result.text,
             "final_label": result.final_label,
             "confidence": result.confidence,
+            "reasoning": result.reasoning,
             "reached_agreement": result.reached_agreement,
             "agreement_round": result.agreement_round or "",
-            "reasoning": result.reasoning,
+            "used_moderator": result.used_moderator,
+            "used_adjudicator": result.used_adjudicator,
+            "needs_human": result.needs_human,
+            "moderator_agreements": mod.agreements if mod else "",
+            "moderator_disagreements": mod.disagreements if mod else "",
+            "moderator_closer": mod.closer_to_label if mod else "",
+            "adjudication_confidence": adj.confidence if adj else "",
+            "adjudication_reasoning": adj.reasoning if adj else "",
+            "agent_a_argument": result.agent_a_final_argument,
+            "agent_a_evidence": result.agent_a_final_evidence,
+            "agent_b_argument": result.agent_b_final_argument,
+            "agent_b_evidence": result.agent_b_final_evidence,
+            "debate_rounds_count": len(result.debate_rounds),
         })
 
 
-async def run_batch(
-    rows: list[dict],
+async def annotate_batch(
+    texts: list[str],
+    task_ids: list[str],
     output_path: Path,
     concurrency: int,
+    total_done: int,
 ) -> list[DreamResult]:
-    """Run annotation with concurrency control."""
     semaphore = asyncio.Semaphore(concurrency)
-    results: list[Optional[DreamResult]] = [None] * len(rows)
+    results: list[DreamResult | None] = [None] * len(texts)
+    completed = errors = 0
     start = time.monotonic()
 
-    async def process(i: int, row: dict):
+    async def run(i: int, text: str, tid: str):
+        nonlocal completed, errors
         async with semaphore:
             try:
-                result = await annotate_with_dream(row["text"], task_id=row["idx"])
+                result: DreamResult = await annotate(text, tid)
+                results[i] = result
             except Exception as e:
-                logger.error(f"[{row['idx']}] Error: {e}")
-                result = DreamResult(
-                    task_id=row["idx"],
-                    review=row["text"],
-                    final_label="0",
-                    confidence=0.0,
+                logger.error(f"[{i}] Error: {e}")
+                results[i] = DreamResult(
+                    task_id=tid, text=text,
+                    final_label="0", confidence=0.0,
                     reasoning=f"Error: {str(e)}",
                     reached_agreement=False,
                 )
-            results[i] = result
-            append_result_csv(result, row["idx"], output_path)
+                errors += 1
+            finally:
+                if results[i]:
+                    write_result(results[i], output_path)
+                completed += 1
+                elapsed = time.monotonic() - start
+                rate = completed / elapsed * 60 if elapsed > 0 else 0
+                done_total = total_done + completed
+                agree = sum(1 for r in results if r and r.reached_agreement)
+                human = sum(1 for r in results if r and r.needs_human)
+                logger.info(
+                    f"  {done_total} done | batch {completed}/{len(texts)} "
+                    f"| errors={errors} | agree={agree} | human_escal={human} "
+                    f"| {rate:.1f}/min"
+                )
 
-            # Progress
-            elapsed = time.monotonic() - start
-            done = sum(1 for r in results if r is not None)
-            rate = done / elapsed * 60 if elapsed > 0 else 0
-
-            agreements = sum(1 for r in results if r and r.reached_agreement)
-            logger.info(f"[{done}/{len(rows)}] {rate:.1f} samples/min | agree: {agreements}/{done}")
-
-    await asyncio.gather(*[process(i, row) for i, row in enumerate(rows)])
+    await asyncio.gather(*[
+        run(i, t, tid)
+        for i, (t, tid) in enumerate(zip(texts, task_ids))
+    ])
     return [r for r in results if r is not None]
 
 
+
+
 async def main():
-    parser = argparse.ArgumentParser(description="DREAM Annotation")
-    parser.add_argument("--input", type=Path, default=DATA_DIR / "unlabeled.csv")
+    parser = argparse.ArgumentParser(description="DREAM — Multi-Agent Debate Annotation")
+    parser.add_argument("--input", type=Path, default=DATA_DIR / "train.csv")
     parser.add_argument("--output", type=Path, default=DATA_DIR / "annotated.csv")
-    parser.add_argument("--concurrency", type=int, default=5, help="Max concurrent (default: 5)")
-    parser.add_argument("--limit", type=int, default=0, help="Limit samples (0=all)")
-    parser.add_argument("--no-resume", action="store_true", help="Start fresh (ignore existing output)")
-    parser.add_argument("--verbose", action="store_true", help="Debug logs")
+    parser.add_argument("--config", type=Path, default=Path("config.yaml"))
+    parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--limit", type=int, default=0, help="Limit rows (0 = all)")
+    parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    # Setup logging
     if args.verbose:
         logger.remove()
         logger.add(lambda msg: print(msg, end=""), level="DEBUG", colorize=True)
 
-    # Load config for rate limit info
-    config = get_config()
-    rate_limit = config.nvidia.rate_limit
-    max_rounds = config.dream.debate.max_rounds
+    config = get_config(str(args.config))
+    logger.info(f"Config: {config.task.name} | model: {config.nvidia.model}")
+    logger.info(f"Debate: {config.dream.debate.max_rounds} rounds | "
+                f"Moderator: {config.dream.moderator.enabled} | "
+                f"Escalation: {config.dream.escalation.enabled}")
 
-    # Calculate optimal concurrency
-    # DREAM: 2 agents × max_rounds + adjudicator (worst case)
-    worst_case_calls = 2 * max_rounds + 1
-    optimal = int(rate_limit / 60 / worst_case_calls * 0.9)
-    optimal = max(1, min(optimal, args.concurrency))
+    text_col = config.task.text_column
+    texts, ids = load_csv(args.input, text_col)
 
-    logger.info("=" * 50)
-    logger.info("DREAM: Multi-Agent Debate Annotation")
-    logger.info(f"Input:     {args.input}")
-    logger.info(f"Output:    {args.output}")
-    logger.info(f"Rate limit: {rate_limit} req/min")
-    logger.info(f"Concurrency: {optimal} (requested: {args.concurrency})")
-    logger.info("=" * 50)
-
-    # Load input
-    rows = load_input_csv(args.input)
-    logger.info(f"Input total: {len(rows)} samples")
-
-    # Resume: skip already done
-    if args.no_resume:
-        done_indices = set()
-    else:
-        done_indices = load_done_indices(args.output)
-
-    pending = [r for r in rows if int(r["idx"]) not in done_indices]
-    logger.info(f"Pending: {len(pending)} (skipped {len(done_indices)} already done)")
+    done_ids = load_done_ids(args.output)
+    pending = [(t, i) for t, i in zip(texts, ids) if i not in done_ids]
+    total_done = len(done_ids)
+    logger.info(f"Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}")
 
     if args.limit > 0:
         pending = pending[:args.limit]
-        logger.info(f"Limited to: {args.limit} samples")
+        logger.info(f"Limit: {args.limit}")
 
     if not pending:
-        logger.info("Nothing to annotate.")
+        logger.info("Nothing to do.")
         return
 
-    # Run
-    results = await run_batch(pending, args.output, optimal)
+    texts_p, ids_p = zip(*pending)
+    results = await annotate_batch(
+        texts=list(texts_p),
+        task_ids=list(ids_p),
+        output_path=args.output,
+        concurrency=args.concurrency,
+        total_done=total_done,
+    )
 
-    # Statistics
     label_1 = sum(1 for r in results if r.final_label == "1")
     label_0 = sum(1 for r in results if r.final_label == "0")
-    agreements = sum(1 for r in results if r.reached_agreement)
+    agree = sum(1 for r in results if r.reached_agreement)
+    human = sum(1 for r in results if r.needs_human)
+    errors = sum(1 for r in results if r.confidence == 0.0)
+    total = len(results)
 
     logger.info("=" * 50)
-    logger.info("DONE!")
-    logger.info(f"Processed: {len(results)}")
-    logger.info(f"Label 1:   {label_1} ({label_1/len(results)*100:.1f}%)")
-    logger.info(f"Label 0:   {label_0} ({label_0/len(results)*100:.1f}%)")
-    logger.info(f"Agreement: {agreements} ({agreements/len(results)*100:.1f}%)")
+    logger.info("DONE")
+    logger.info(f"  Processed: {total}")
+    logger.info(f"  Label 1:   {label_1} ({label_1/total*100:.1f}%)")
+    logger.info(f"  Label 0:   {label_0} ({label_0/total*100:.1f}%)")
+    logger.info(f"  Agreement: {agree} ({agree/total*100:.1f}%)")
+    logger.info(f"  Human esc: {human} ({human/total*100:.1f}%)")
+    logger.info(f"  Errors:    {errors}")
 
 
 if __name__ == "__main__":

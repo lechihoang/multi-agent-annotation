@@ -1,197 +1,173 @@
 # =============================================================================
-# DREAM: Debate-based RElevance Assessment with Multi-agents
-# Based on: arXiv:2602.06526 - Completing Missing Annotation
-#
-# Prompt design adapted from paper for Vietnamese complaint detection.
-# Output uses Pydantic (not JSON) for structured parsing.
+# DREAM Configuration — UIT-ViCTSD Constructiveness Detection
+# Dataset: arXiv:2103.10069 - Vietnamese Constructive and Toxic Speech Detection
+# Task: Binary classification (Constructive vs Non-constructive)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# LLM Provider (NVIDIA NIM - compatible with OpenAI SDK)
+# LLM Settings
 # ---------------------------------------------------------------------------
 nvidia:
   model: "meta/llama-3.3-70b-instruct"
   base_url: "https://integrate.api.nvidia.com/v1"
-  temperature: 0.0  # DREAM uses temperature=0.0 for deterministic output
+  temperature: 0.0
   top_p: 0.7
   max_tokens: 2048
   stream: false
   max_retries: 5
-  rate_limit: 40  # requests per minute
+  rate_limit: 40
 
 # ---------------------------------------------------------------------------
-# Task Definition
+# Task Definition — UIT-ViCTSD Constructiveness
 # ---------------------------------------------------------------------------
 task:
-  name: "complaint_detection"
-  text_column: "review"
-  label_column: "label"
-
+  name: "victsd_constructiveness"
+  text_column: "Comment"
+  label_column: "Constructiveness"
   labels:
-    # viOCD Paper (Section 3.1) - Định nghĩa chính xác:
-    # Nhãn 1 (PHÀN NÀN): Thể hiện sự không hài lòng giữa thực tế và kỳ vọng,
-    #                      thường kèm theo mong muốn được giải quyết. Có thể bao gồm cảnh báo,
-    #                      đe dọa, đề xuất, hoặc lời khuyên. PHẢI CÓ MỤC ĐÍCH XÂY DỰNG.
-    # Nhãn 0 (KHÔNG PHÀN NÀN): Khen ngợi, ca ngợi, thể hiện sự hài lòng,
-    #                          HOẶC insult/chửi mắng không có mục đích xây dựng.
-    "0": "Không phàn nàn — Khen ngợi, ca ngợi, hài lòng, HOẶC insult/chửi mắng không có mục đích xây dựng."
-    "1": "Phàn nàn — Sự không hài lòng thực tế vs kỳ vọng + mong muốn giải quyết + mục đích xây dựng (đề xuất/cảnh báo)."
+    "0": "Non-constructive — Little information, only simple emotions, no meaningful contribution."
+    "1": "Constructive — Reinforces point of view, provides information and particularized opinions, promotes the topic."
 
 # ---------------------------------------------------------------------------
-# DREAM Configuration (Multi-Agent Debate)
+# DREAM Pipeline
 # ---------------------------------------------------------------------------
 dream:
   enabled: true
 
-  # ── Debate Parameters ─────────────────────────────────────────────────
+  # ── Debate Parameters ─────────────────────────────────────────────────────
   debate:
-    max_rounds: 2           # Paper: R=2 is optimal (Section 3.2.2)
-    num_agents: 2           # 2 agents with opposing stances
-    temperature: 0.0        # Deterministic output
+    max_rounds: 2
+    temperature: 0.0
 
-  # ── Guidelines (theo viOCD Paper Section 3.1) ───────────────────────────
-  # Hoàn toàn tiếng Việt
+  # ── Guidelines (from paper Section 3.1) ──────────────────────────────────
   guidelines: |
-    <huong_dan>
-    ĐỊNH NGHĨA CHÍNH XÁC (theo viOCD Paper):
+    <guidelines>
+    TASK: Classify Vietnamese social media comments as Constructive (1) or Non-constructive (0).
 
-    Nhãn 1 (PHÀN NÀN): Review THỂ HIỆN SỰ KHÔNG HÀI LÒNG giữa thực tế và kỳ vọng,
-    kèm theo MONG MUỐN ĐƯỢC GIẢI QUYẾT. Có thể bao gồm cảnh báo, đe dọa,
-    đề xuất, hoặc lời khuyên. PHẢI MANG TÍNH XÂY DỰNG, không phải chửi bới.
+    Label 1 — Constructive:
+    - Comments that reinforce the writer's point of view
+    - Provide specific information and particularized opinions
+    - Contribute to promoting the topic
+    - Often longer, detailed explanations
 
-    Nhãn 0 (KHÔNG PHÀN NÀN): Khen ngợi, ca ngợi, thể hiện sự hài lòng,
-    HOẶC công kích/chửi mắng mà KHÔNG CÓ mục đích xây dựng (không đề xuất gì).
+    Label 0 — Non-constructive:
+    - Little to no useful information
+    - Only express simple emotions (e.g., "I hope you get well", "Nice!")
+    - No meaningful contribution to the discussion
 
-    VÍ DỤ MINH HỌA:
+    EXAMPLES FROM PAPER:
 
-    1. "Tôi rất hài lòng với sản phẩm, cảm ơn shop. Mong shop phát triển tốt hơn." → Nhãn 0
-       (Câu cuối là MONG MUỐN NHƯNG KHÔNG gắn với sự không hài lòng. Chỉ là lời chúc tốt đẹp.)
+    Label 1 (Constructive):
+    - "Nội dung bài viết là câu trả lời đơn giản cho câu hỏi... cả thế giới đều thế thì khó mà mong đến việc giữ vững tốc độ tăng trưởng kinh tế!"
+      (Long explanatory comment with specific information and opinion)
 
-    2. "Hàng rất tốt nhưng giá đắt vì giao hàng quá lâu." → Nhãn 1
-       (Kết hợp khen + phàn nàn rõ ràng về giá và giao hàng → phàn nàn)
+    Label 0 (Non-constructive):
+    - "Cầu mong ông sớm khỏe mạnh" (I hope you get well soon — simple emotion, no contribution)
+    - "70% cơ thể người là nước mà!" (70% of human body is water — random fact, no contribution)
 
-    3. "Không hiểu lý do gì mà lừa đảo vậy?" → Nhãn 1
-       (Câu hỏi mang tính PHÀN NÀN/cảnh báo người khác)
+    IMPORTANT:
+    - Do NOT confuse length with constructiveness. A short comment can be constructive if it provides a specific opinion.
+    - Simple well-wishes = Label 0 (no contribution)
+    - Questions seeking clarification can be Label 1 if they add context
+    - Comments with specific data/facts/examples = likely Label 1
+    </guidelines>
 
-    4. "Game dở lắm, đừng tải game này." → Nhãn 0
-       (Công kích + cảnh báo nhưng KHÔNG có mục đích xây dựng, chỉ nói xấu)
-
-    5. "Tôi đã dùng 5 chai nước tẩy trang mà vẫn hài lòng." → Nhãn 0
-       (Khen ngợi, hài lòng)
-
-    QUY TẮC QUAN TRỌNG:
-    - Mục đích xây dựng là BẮT BUỘC cho Nhãn 1: phải có đề xuất/cảnh báo có ích
-    - Công kích/chửi mắng không kèm đề xuất = Nhãn 0
-    - Lời chúc/mong muốn tốt đẹp chung chung KHÔNG phải phàn nàn (Nhãn 0)
-    - Không đánh giá tính đúng đắn, chỉ đánh giá MỤC ĐÍCH của người viết
-    - Đánh giá toàn bộ review
-    </huong_dan>
-
-  # ── Agent System Messages ────────────────────────────────────────────────
-
-  # Agent A: Ủng hộ phàn nàn (ban đầu: Nhãn 1)
-  agent_complaint_system: |
-    Bạn là Agent_A - chuyên gia phân tích phàn nàn trong review tiếng Việt.
-    Nhiệm vụ: Xác định review là PHÀN NÀN (Nhãn 1) hay KHÔNG PHÀN NÀN (Nhãn 0).
-    Có một Agent khác là Agent_B cùng thực hiện nhiệm vụ này.
-    Hai agent sẽ tranh luận với nhau để đi đến thống nhất.
+  # ── Agent System Prompts ──────────────────────────────────────────────────
+  agent_a_system: |
+    You are Agent_A — a Vietnamese language expert specializing in constructive speech detection.
+    Your task: classify social media comments as Constructive (1) or Non-constructive (0).
+    You may agree or disagree with Label 1 based on your analysis.
     {guidelines}
-    Bạn có thể giữ hoặc THAY ĐỔI quan điểm ban đầu nếu bị thuyết phục.
 
-  # Agent B: Ủng hộ không phàn nàn (ban đầu: Nhãn 0)
-  agent_non_complaint_system: |
-    Bạn là Agent_B - chuyên gia phân tích phàn nàn trong review tiếng Việt.
-    Nhiệm vụ: Xác định review là PHÀN NÀN (Nhãn 1) hay KHÔNG PHÀN NÀN (Nhãn 0).
-    Có một Agent khác là Agent_A cùng thực hiện nhiệm vụ này.
-    Hai agent sẽ tranh luận với nhau để đi đến thống nhất.
+  agent_b_system: |
+    You are Agent_B — a Vietnamese language expert specializing in constructive speech detection.
+    Your task: classify social media comments as Constructive (1) or Non-constructive (0).
+    You may agree or disagree with Label 0 based on your analysis.
     {guidelines}
-    Bạn có thể giữ hoặc THAY ĐỔI quan điểm ban đầu nếu bị thuyết phục.
 
   # ── User Prompt Templates ────────────────────────────────────────────────
-
-  # Vòng đầu tiên
   agent_user_template: |
-    Review cần phân tích:
-    {review}
+    Task: Classify the following Vietnamese social media comment.
 
-    Nhiệm vụ: Xác định review trên là PHÀN NÀN (Nhãn 1) hay KHÔNG PHÀN NÀN (Nhãn 0).
+    Comment:
+    {text}
 
-    Quan điểm hiện tại của bạn: Nhãn {stance}
-    - Nhãn 1 = PHÀN NÀN: thể hiện sự không hài lòng, đề xuất, mong muốn, cảnh báo
-    - Nhãn 0 = KHÔNG PHÀN NÀN: chỉ khen ngợi, hài lòng, hoặc chửi mắng không có đề xuất
+    Options:
+    {labels}
 
-    Hướng dẫn: {guidelines}
+    Your current position: {stance}
+    Analyze the comment carefully and decide the correct label.
 
-    Phân tích review và đưa ra quyết định. Bạn có thể giữ hoặc THAY ĐỔI quan điểm hiện tại nếu phân tích cho thấy quan điểm khác đúng hơn.
+    Respond with: label (0 or 1), evidence, argument.
 
-    Trả lời theo mẫu Pydantic: evidence (trích dẫn từ review), argument (lập luận), label (0 hoặc 1).
-
-  # Các vòng tiếp theo
   agent_roundN_template: |
-    Review cần phân tích:
-    {review}
+    Task: Classify the following Vietnamese social media comment.
 
-    Lịch sử tranh luận từ vòng trước:
+    Comment:
+    {text}
+
+    Options:
+    {labels}
+
+    Your current position: {stance}
+
+    Previous debate rounds:
     {history}
 
-    Nhiệm vụ: Xác định review trên là PHÀN NÀN (Nhãn 1) hay KHÔNG PHÀN NÀN (Nhãn 0).
+    Read the debate history carefully.
+    - Rebut or acknowledge the opposing agent's arguments.
+    - Update or defend your position based on the evidence.
+    Quote specific evidence from the comment to support your reasoning.
 
-    Quan điểm hiện tại của bạn: Nhãn {stance}
-    - Nhãn 1 = PHÀN NÀN: thể hiện sự không hài lòng, đề xuất, mong muốn, cảnh báo
-    - Nhãn 0 = KHÔNG PHÀN NÀN: chỉ khen ngợi, hài lòng, hoặc chửi mắng không có đề xuất
+    Respond with: label (0 or 1), evidence, argument.
 
-    Hướng dẫn: {guidelines}
+  # ── Moderator ─────────────────────────────────────────────────────────────
+  moderator:
+    enabled: true
+    system: |
+      You are a moderator reviewing a debate about Vietnamese social media comment classification.
+      Identify the main points of disagreement between Agent_A and Agent_B.
+      Summarize: (1) what they agree on, (2) what they disagree on.
+    user_template: |
+      Comment: {text}
 
-    Đọc lịch sử tranh luận, phản bác hoặc thừa nhận lập luận của Agent kia.
-    Bạn có thể giữ hoặc THAY ĐỔI quan điểm hiện tại nếu bị thuyết phục.
+      Debate history:
+      {history}
 
-    Trả lời theo mẫu Pydantic: evidence (trích dẫn từ review), argument (lập luận có tham chiếu đến lịch sử), label (0 hoặc 1).
+      Summarize the key points of disagreement and areas of agreement.
 
-  # ── Thẩm phán (khi hai Agent không đồng ý) ─────────────────────────────
+  # ── Adjudicator ──────────────────────────────────────────────────────────
+  adjudicator:
+    temperature: 0.0
+    max_tokens: 1024
+    system: |
+      You are the Adjudicator — a neutral expert making the final decision.
+      Evaluate the debate history and comment objectively.
+      {guidelines}
+    user_template: |
+      Comment to classify:
+      {text}
 
-  adjudicator_system: |
-    Bạn là THẨM PHÁN - chuyên gia phân tích phàn nàn trong review tiếng Việt.
-    Nhiệm vụ: Đọc lịch sử tranh luận giữa hai Agent và đưa ra quyết định cuối cùng.
-    {guidelines}
-    Đánh giá chất lượng lập luận của từng Agent, sau đó đưa ra quyết định của riêng bạn.
-    Confidence: mức độ chắc chắn của quyết định (0.0-1.0).
+      Label definitions:
+      {labels}
 
-  adjudicator_user_template: |
-    Review cần phân tích:
-    {review}
+      Debate history:
+      {history}
 
-    Lịch sử tranh luận giữa hai Agent:
-    {history}
+      Moderator notes: {moderator_notes}
 
-    Hai Agent không đồng ý với nhau. Bạn là Thẩm Phán, hãy đọc lịch sử tranh luận,
-    đánh giá lập luận của từng Agent, và đưa ra quyết định cuối cùng.
+      Make the final decision. Respond with: final_label (0 or 1), confidence (0.0-1.0), reasoning.
 
-    Hướng dẫn: {guidelines}
-
-    Trả lời theo mẫu Pydantic: final_label (0 hoặc 1), confidence (0.0-1.0), reasoning (lập luận).
-
-  # ── LLM Settings for DREAM ───────────────────────────────────────────
-  llm:
-    temperature: 0.0  # DREAM uses deterministic output
-    max_tokens: 4096
-
-  # ── Human Escalation (DREAM Paper Section 3.1) ─────────────────────────
-  # If agents STILL disagree after max_rounds, escalate to human
-  # Human annotator receives: review + debate history (both agents' reasoning & evidence)
-  # This helps understand the source of disagreement for better judgment
+  # ── Human Escalation ────────────────────────────────────────────────────
   escalation:
-    enabled: true           # Enable escalation for disagreements
-    use_llm_adjudicator: true  # True = use LLM adjudicator first
-                               # If confidence < threshold, escalate to human
-    adjudicator_model: null  # Use same model as agents if null
-    export_file: "data/escalated_for_human.csv"  # File to export cases needing human review
-    confidence_threshold: 0.7  # If adjudicator confidence < threshold, escalate to human
+    enabled: true
+    confidence_threshold: 0.7
+    export_file: "data/victsd_escalated.csv"
 
-# ---------------------------------------------------------------------------
-# Legacy MADISSE config (kept for backward compatibility)
-# ---------------------------------------------------------------------------
-madisse:
-  enabled: false  # Disabled, using DREAM instead
+  # ── LLM Settings ────────────────────────────────────────────────────────
+  llm:
+    temperature: 0.0
+    max_tokens: 2048
 
 # ---------------------------------------------------------------------------
 # Logging

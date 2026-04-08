@@ -14,7 +14,7 @@ def main():
         reader = csv.DictReader(f)
         for row in reader:
             if row.get('final_label', '').strip() in ['0', '1']:
-                annotated[row['review']] = row['final_label']
+                annotated[row['text']] = row['final_label']
 
     print(f'Annotated unique reviews: {len(annotated)}')
 

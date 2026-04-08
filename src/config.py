@@ -1,6 +1,11 @@
+"""
+Config loader — YAML → dataclass for DREAM pipeline.
+Task-agnostic: swap config.yaml to run on different NLP classification tasks.
+"""
+
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 def _load_yaml(path: str = "config.yaml") -> Dict[str, Any]:
@@ -23,11 +28,15 @@ def _get(d: Dict, *keys, default=None):
     return v
 
 
+# ---------------------------------------------------------------------------
+# LLM / API
+# ---------------------------------------------------------------------------
+
 @dataclass
 class NvidiaConfig:
     model: str = "meta/llama-3.3-70b-instruct"
     base_url: str = "https://integrate.api.nvidia.com/v1"
-    temperature: float = 0.0  # DREAM uses temperature=0.0
+    temperature: float = 0.0
     top_p: float = 0.7
     max_tokens: int = 2048
     stream: bool = False
@@ -40,101 +49,75 @@ class NvidiaConfig:
     )
 
 
+# ---------------------------------------------------------------------------
+# Task Definition (task-agnostic)
+# ---------------------------------------------------------------------------
+
 @dataclass
 class TaskConfig:
-    name: str = "complaint_detection"
+    name: str = "binary_classification"
     text_column: str = "review"
     label_column: str = "label"
     labels: Dict[str, str] = field(
         default_factory=lambda: {
-            "0": "Non-complaint — Pure praise, satisfaction, OR insult/hate speech WITHOUT constructive intent.",
-            "1": "Complaint — Dissatisfaction, suggestion, wish, warning, OR mixed WITH constructive intent.",
+            "0": "Label 0",
+            "1": "Label 1",
         }
     )
+    min_text_length: int = 10
 
 
 # ---------------------------------------------------------------------------
-# DREAM Configuration (Multi-Agent Debate)
-# Based on arXiv:2602.06526
+# DREAM Pipeline
 # ---------------------------------------------------------------------------
 
 @dataclass
-class DreamDebateConfig:
-    max_rounds: int = 2  # Paper: R=2 is optimal
-    num_agents: int = 2  # 2 agents with opposing stances
-    temperature: float = 0.0  # Deterministic output
+class DebateConfig:
+    max_rounds: int = 2
+    temperature: float = 0.0
 
 
 @dataclass
-class DreamAmbiguityConfig:
-    enabled: bool = False  # DREAM uses agreement, not ambiguity detection
-    detection_threshold: float = 0.5
+class ModeratorConfig:
+    enabled: bool = True
+    system: str = ""
+    user_template: str = ""
+
+
+@dataclass
+class AdjudicatorConfig:
+    temperature: float = 0.0
+    max_tokens: int = 1024
+    system: str = ""
+    user_template: str = ""
+
+
+@dataclass
+class EscalationConfig:
+    enabled: bool = True
+    confidence_threshold: float = 0.7
+    export_file: str = "data/escalated.csv"
 
 
 @dataclass
 class DreamLLMConfig:
-    temperature: float = 0.0  # DREAM uses deterministic output
-    max_tokens: int = 1024
-
-
-@dataclass
-class DreamEscalationConfig:
-    enabled: bool = True  # Enable human escalation for disagreements
-    use_llm_adjudicator: bool = True  # Use LLM as adjudicator instead of human
-    adjudicator_model: Optional[str] = None  # Use same model as agents if null
-    export_file: str = "data/escalated_for_human.csv"  # File to export unresolved cases
-    confidence_threshold: float = 0.7  # If adjudicator confidence < threshold, escalate to human
+    temperature: float = 0.0
+    max_tokens: int = 2048
 
 
 @dataclass
 class DreamConfig:
     enabled: bool = True
     guidelines: str = ""
-    agent_complaint_system: str = ""
-    agent_non_complaint_system: str = ""
-    adjudicator_system: str = ""
+    agent_a_system: str = ""
+    agent_b_system: str = ""
     agent_user_template: str = ""
     agent_roundN_template: str = ""
-    adjudicator_user_template: str = ""
-    debate: DreamDebateConfig = field(default_factory=DreamDebateConfig)
-    ambiguity: DreamAmbiguityConfig = field(default_factory=DreamAmbiguityConfig)
+    moderator: ModeratorConfig = field(default_factory=ModeratorConfig)
+    adjudicator: AdjudicatorConfig = field(default_factory=AdjudicatorConfig)
+    escalation: EscalationConfig = field(default_factory=EscalationConfig)
+    debate: DebateConfig = field(default_factory=DebateConfig)
     llm: DreamLLMConfig = field(default_factory=DreamLLMConfig)
-    escalation: DreamEscalationConfig = field(default_factory=DreamEscalationConfig)
-
-
-# ---------------------------------------------------------------------------
-# Legacy MADISSE Configuration (backward compatibility)
-# ---------------------------------------------------------------------------
-
-@dataclass
-class MadisseDebateConfig:
-    max_rounds: int = 2
-    num_agents: int = 2
-
-
-@dataclass
-class MadisseAmbiguityConfig:
-    enabled: bool = True
-    detection_threshold: float = 0.5
-
-
-@dataclass
-class MadisseLLMConfig:
-    temperature: float = 0.6
-    max_tokens: int = 2048
-
-
-@dataclass
-class MadisseConfig:
-    enabled: bool = False  # Disabled by default, use DREAM instead
-    guidelines: str = ""
-    agent_complaint_system: str = ""
-    agent_non_complaint_system: str = ""
-    adjudicator_system: str = ""
-    ambiguity_system: str = ""
-    debate: MadisseDebateConfig = field(default_factory=MadisseDebateConfig)
-    ambiguity: MadisseAmbiguityConfig = field(default_factory=MadisseAmbiguityConfig)
-    llm: MadisseLLMConfig = field(default_factory=MadisseLLMConfig)
 
 
 @dataclass
@@ -142,27 +125,24 @@ class Config:
     nvidia: NvidiaConfig
     task: TaskConfig
     dream: DreamConfig
-    madisse: MadisseConfig  # Legacy, kept for backward compatibility
     logging_level: str = "INFO"
 
 
+# ---------------------------------------------------------------------------
+# Loader
+# ---------------------------------------------------------------------------
+
 def load_config(path: str = "config.yaml") -> Config:
     d = _load_yaml(path)
+
     nv = _get(d, "nvidia") or {}
     task = _get(d, "task") or {}
-
-    # Load DREAM config
     dream = _get(d, "dream") or {}
     dream_debate = _get(dream, "debate") or {}
-    dream_ambig = _get(dream, "ambiguity") or {}
-    dream_llm = _get(dream, "llm") or {}
-    dream_escalation = _get(dream, "escalation") or {}
-
-    # Load MADISSE config (legacy)
-    mad = _get(d, "madisse") or {}
-    mad_debate = _get(mad, "debate") or {}
-    mad_ambig = _get(mad, "ambiguity") or {}
-    mad_llm = _get(mad, "llm") or {}
+    mod = _get(dream, "moderator") or {}
+    adj = _get(dream, "adjudicator") or {}
+    esc = _get(dream, "escalation") or {}
+    llm = _get(dream, "llm") or {}
 
     return Config(
         nvidia=NvidiaConfig(
@@ -176,64 +156,51 @@ def load_config(path: str = "config.yaml") -> Config:
             rate_limit=int(nv.get("rate_limit", 40)),
         ),
         task=TaskConfig(
-            name=task.get("name", "complaint_detection"),
+            name=task.get("name", "binary_classification"),
             text_column=task.get("text_column", "review"),
             label_column=task.get("label_column", "label"),
-            labels=task.get("labels", {"0": "Non-complaint", "1": "Complaint"}),
+            labels=task.get("labels", {"0": "Label 0", "1": "Label 1"}),
+            min_text_length=int(task.get("min_text_length", 10)),
         ),
         dream=DreamConfig(
             enabled=dream.get("enabled", True),
             guidelines=dream.get("guidelines", ""),
-            agent_complaint_system=dream.get("agent_complaint_system", ""),
-            agent_non_complaint_system=dream.get("agent_non_complaint_system", ""),
-            adjudicator_system=dream.get("adjudicator_system", ""),
+            agent_a_system=dream.get("agent_a_system", ""),
+            agent_b_system=dream.get("agent_b_system", ""),
             agent_user_template=dream.get("agent_user_template", ""),
             agent_roundN_template=dream.get("agent_roundN_template", ""),
-            adjudicator_user_template=dream.get("adjudicator_user_template", ""),
-            debate=DreamDebateConfig(
+            moderator=ModeratorConfig(
+                enabled=mod.get("enabled", True),
+                system=mod.get("system", ""),
+                user_template=mod.get("user_template", ""),
+            ),
+            adjudicator=AdjudicatorConfig(
+                temperature=float(adj.get("temperature", 0.0)),
+                max_tokens=int(adj.get("max_tokens", 1024)),
+                system=adj.get("system", ""),
+                user_template=adj.get("user_template", ""),
+            ),
+            escalation=EscalationConfig(
+                enabled=esc.get("enabled", True),
+                confidence_threshold=float(esc.get("confidence_threshold", 0.7)),
+                export_file=esc.get("export_file", "data/escalated.csv"),
+            ),
+            debate=DebateConfig(
                 max_rounds=int(dream_debate.get("max_rounds", 2)),
-                num_agents=int(dream_debate.get("num_agents", 2)),
                 temperature=float(dream_debate.get("temperature", 0.0)),
             ),
-            ambiguity=DreamAmbiguityConfig(
-                enabled=dream_ambig.get("enabled", False),
-                detection_threshold=float(dream_ambig.get("detection_threshold", 0.5)),
-            ),
             llm=DreamLLMConfig(
-                temperature=float(dream_llm.get("temperature", 0.0)),
-                max_tokens=int(dream_llm.get("max_tokens", 1024)),
-            ),
-            escalation=DreamEscalationConfig(
-                enabled=dream_escalation.get("enabled", True),
-                use_llm_adjudicator=dream_escalation.get("use_llm_adjudicator", True),
-                adjudicator_model=dream_escalation.get("adjudicator_model"),
-                export_file=dream_escalation.get("export_file", "data/escalated_for_human.csv"),
-                confidence_threshold=dream_escalation.get("confidence_threshold", 0.7),
-            ),
-        ),
-        madisse=MadisseConfig(
-            enabled=mad.get("enabled", False),
-            guidelines=mad.get("guidelines", ""),
-            agent_complaint_system=mad.get("agent_complaint_system", ""),
-            agent_non_complaint_system=mad.get("agent_non_complaint_system", ""),
-            adjudicator_system=mad.get("adjudicator_system", ""),
-            ambiguity_system=mad.get("ambiguity_system", ""),
-            debate=MadisseDebateConfig(
-                max_rounds=int(mad_debate.get("max_rounds", 2)),
-                num_agents=int(mad_debate.get("num_agents", 2)),
-            ),
-            ambiguity=MadisseAmbiguityConfig(
-                enabled=mad_ambig.get("enabled", True),
-                detection_threshold=float(mad_ambig.get("detection_threshold", 0.5)),
-            ),
-            llm=MadisseLLMConfig(
-                temperature=float(mad_llm.get("temperature", 0.6)),
-                max_tokens=int(mad_llm.get("max_tokens", 2048)),
+                temperature=float(llm.get("temperature", 0.0)),
+                max_tokens=int(llm.get("max_tokens", 2048)),
             ),
         ),
         logging_level=_get(d, "logging", "level") or "INFO",
     )
 
+
+# ---------------------------------------------------------------------------
+# Singleton cache
+# ---------------------------------------------------------------------------
 
 _config: Optional[Config] = None
 
