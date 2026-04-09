@@ -11,6 +11,7 @@ Based on: arXiv:2602.06526 - DREAM: Multi-Agent Debate for NLP Classification
 import argparse
 import asyncio
 import csv
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -159,7 +160,7 @@ async def main():
 
     if args.verbose:
         logger.remove()
-        logger.add(lambda msg: print(msg, end=""), level="DEBUG", colorize=True)
+        logger.add(lambda msg: print(msg, end="", file=sys.stderr), level="DEBUG", colorize=True)
 
     config = get_config(str(args.config))
     logger.info(f"Config: {config.task.name} | model: {config.nvidia.model}")
