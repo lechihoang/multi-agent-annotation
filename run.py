@@ -1,11 +1,9 @@
 """
 DREAM — Multi-Agent Debate Annotation Runner.
-
 Usage:
-  uv run python run.py --input data/ViCTSD_unlabeled.csv \
+  python run.py --input data/ViCTSD_unlabeled.csv \
     --output data/ViCTSD_annotated.csv --limit 5 --concurrency 2
-
-Based on: arXiv:2602.06526 - DREAM: Multi-Agent Debate for NLP Classification
+Based on arXiv:2602.06526 - DREAM: Multi-Agent Debate for NLP Classification
 """
 
 import argparse
@@ -28,16 +26,11 @@ from src.pipeline import annotate, DreamResult
 DATA_DIR = Path("data")
 
 
-def _setup_verbose_logging():
-    """Set up logging to stdout for Kaggle cell visibility."""
-    logger.remove()
-    logger.add(sys.stdout, level="DEBUG", colorize=True,
-               format="<level>{time:HH:mm:ss} | {level}</level> | {message}",
-               enqueue=False, flush=True)
+def _log(*args, **kwargs):
+    print(*args, **kwargs, flush=True)
 
 
 def load_done_ids(output_path: Path) -> set[str]:
-    """Read task_ids already annotated (for resume)."""
     if not output_path.exists():
         return set()
     done = set()
@@ -46,12 +39,11 @@ def load_done_ids(output_path: Path) -> set[str]:
             tid = row.get("task_id", "").strip()
             if tid and row.get("final_label", ""):
                 done.add(tid)
-    logger.info(f"Resume: {len(done)} already done in {output_path}")
+    _log(f"[INFO] Resume: {len(done)} already done in {output_path}")
     return done
 
 
 def load_csv(path: Path, text_col: str):
-    """Load texts and IDs from CSV."""
     texts, ids = [], []
     with open(path, encoding="utf-8-sig") as f:
         for idx, row in enumerate(csv.DictReader(f)):
@@ -61,7 +53,6 @@ def load_csv(path: Path, text_col: str):
 
 
 def write_result(result: DreamResult, path: Path):
-    """Append one result to CSV."""
     fieldnames = [
         "task_id", "text", "final_label", "confidence",
         "reasoning", "reached_agreement", "agreement_round",
@@ -111,6 +102,7 @@ async def annotate_batch(
     output_path: Path,
     concurrency: int,
     total_done: int,
+    verbose: bool = False,
 ) -> list[DreamResult]:
     semaphore = asyncio.Semaphore(concurrency)
     results: list[DreamResult | None] = [None] * len(texts)
@@ -124,7 +116,8 @@ async def annotate_batch(
                 result: DreamResult = await annotate(text, tid)
                 results[i] = result
             except Exception as e:
-                logger.error(f"[{i}] Error: {e}")
+                if verbose:
+                    _log(f"[ERROR] [{i}] {e}")
                 results[i] = DreamResult(
                     task_id=tid, text=text,
                     final_label="0", confidence=0.0,
@@ -141,19 +134,16 @@ async def annotate_batch(
                 done_total = total_done + completed
                 agree = sum(1 for r in results if r and r.reached_agreement)
                 human = sum(1 for r in results if r and r.needs_human)
-                logger.info(
-                    f"  {done_total} done | batch {completed}/{len(texts)} "
-                    f"| errors={errors} | agree={agree} | human_escal={human} "
-                    f"| {rate:.1f}/min"
-                )
+                if verbose:
+                    _log(f"[INFO] {done_total} done | batch {completed}/{len(texts)} "
+                         f"| errors={errors} | agree={agree} | human_escal={human} "
+                         f"| {rate:.1f}/min")
 
     await asyncio.gather(*[
         run(i, t, tid)
         for i, (t, tid) in enumerate(zip(texts, task_ids))
     ])
     return [r for r in results if r is not None]
-
-
 
 
 async def main():
@@ -166,14 +156,25 @@ async def main():
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    if args.verbose:
-        _setup_verbose_logging()
+    verbose = args.verbose
+
+    # Non-verbose: loguru to stderr (background)
+    # Verbose: plain print() + flush=True for Kaggle cell visibility
+    if verbose:
+        _log("[INFO] Starting DREAM pipeline...")
 
     config = get_config(str(args.config))
-    logger.info(f"Config: {config.task.name} | model: {config.nvidia.model}")
-    logger.info(f"Debate: {config.dream.debate.max_rounds} rounds | "
-                f"Moderator: {config.dream.moderator.enabled} | "
-                f"Escalation: {config.dream.escalation.enabled}")
+
+    if verbose:
+        _log(f"[INFO] Config: {config.task.name} | model: {config.nvidia.model}")
+        _log(f"[INFO] Debate: {config.dream.debate.max_rounds} rounds | "
+             f"Moderator: {config.dream.moderator.enabled} | "
+             f"Escalation: {config.dream.escalation.enabled}")
+    else:
+        logger.info(f"Config: {config.task.name} | model: {config.nvidia.model}")
+        logger.info(f"Debate: {config.dream.debate.max_rounds} rounds | "
+                    f"Moderator: {config.dream.moderator.enabled} | "
+                    f"Escalation: {config.dream.escalation.enabled}")
 
     text_col = config.task.text_column
     texts, ids = load_csv(args.input, text_col)
@@ -181,14 +182,24 @@ async def main():
     done_ids = load_done_ids(args.output)
     pending = [(t, i) for t, i in zip(texts, ids) if i not in done_ids]
     total_done = len(done_ids)
-    logger.info(f"Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}")
+
+    if verbose:
+        _log(f"[INFO] Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}")
+    else:
+        logger.info(f"Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}")
 
     if args.limit > 0:
         pending = pending[:args.limit]
-        logger.info(f"Limit: {args.limit}")
+        if verbose:
+            _log(f"[INFO] Limit: {args.limit}")
+        else:
+            logger.info(f"Limit: {args.limit}")
 
     if not pending:
-        logger.info("Nothing to do.")
+        if verbose:
+            _log("[INFO] Nothing to do.")
+        else:
+            logger.info("Nothing to do.")
         return
 
     texts_p, ids_p = zip(*pending)
@@ -198,6 +209,7 @@ async def main():
         output_path=args.output,
         concurrency=args.concurrency,
         total_done=total_done,
+        verbose=verbose,
     )
 
     label_1 = sum(1 for r in results if r.final_label == "1")
@@ -207,14 +219,24 @@ async def main():
     errors = sum(1 for r in results if r.confidence == 0.0)
     total = len(results)
 
-    logger.info("=" * 50)
-    logger.info("DONE")
-    logger.info(f"  Processed: {total}")
-    logger.info(f"  Label 1:   {label_1} ({label_1/total*100:.1f}%)")
-    logger.info(f"  Label 0:   {label_0} ({label_0/total*100:.1f}%)")
-    logger.info(f"  Agreement: {agree} ({agree/total*100:.1f}%)")
-    logger.info(f"  Human esc: {human} ({human/total*100:.1f}%)")
-    logger.info(f"  Errors:    {errors}")
+    if verbose:
+        _log("=" * 50)
+        _log("[INFO] DONE")
+        _log(f"[INFO] Processed: {total}")
+        _log(f"[INFO] Label 1:   {label_1} ({label_1/total*100:.1f}%)")
+        _log(f"[INFO] Label 0:   {label_0} ({label_0/total*100:.1f}%)")
+        _log(f"[INFO] Agreement: {agree} ({agree/total*100:.1f}%)")
+        _log(f"[INFO] Human esc: {human} ({human/total*100:.1f}%)")
+        _log(f"[INFO] Errors:    {errors}")
+    else:
+        logger.info("=" * 50)
+        logger.info("DONE")
+        logger.info(f"  Processed: {total}")
+        logger.info(f"  Label 1:   {label_1} ({label_1/total*100:.1f}%)")
+        logger.info(f"  Label 0:   {label_0} ({label_0/total*100:.1f}%)")
+        logger.info(f"  Agreement: {agree} ({agree/total*100:.1f}%)")
+        logger.info(f"  Human esc: {human} ({human/total*100:.1f}%)")
+        logger.info(f"  Errors:    {errors}")
 
 
 if __name__ == "__main__":
