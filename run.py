@@ -9,6 +9,7 @@ Based on arXiv:2602.06526 - DREAM: Multi-Agent Debate for NLP Classification
 import argparse
 import asyncio
 import csv
+import hashlib
 import sys
 import time
 import uuid
@@ -40,12 +41,17 @@ def load_done_ids(output_path: Path) -> set[str]:
     return done
 
 
+def _text_to_id(text: str) -> str:
+    """Deterministic task_id from text content — enables proper resume/dedup across runs."""
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, text))
+
+
 def load_csv(path: Path, text_col: str):
     texts, ids = [], []
     with open(path, encoding="utf-8-sig") as f:
         for idx, row in enumerate(csv.DictReader(f)):
             texts.append(row[text_col])
-            ids.append(str(uuid.uuid4()))
+            ids.append(_text_to_id(row[text_col]))
     return texts, ids
 
 
