@@ -26,10 +26,6 @@ from src.pipeline import annotate, DreamResult
 DATA_DIR = Path("data")
 
 
-def _log(*args, **kwargs):
-    print(*args, **kwargs, flush=True)
-
-
 def load_done_ids(output_path: Path) -> set[str]:
     if not output_path.exists():
         return set()
@@ -39,7 +35,8 @@ def load_done_ids(output_path: Path) -> set[str]:
             tid = row.get("task_id", "").strip()
             if tid and row.get("final_label", ""):
                 done.add(tid)
-    _log(f"[INFO] Resume: {len(done)} already done in {output_path}")
+    sys.stderr.write(f"[INFO] Resume: {len(done)} already done in {output_path}\n")
+    sys.stderr.flush()
     return done
 
 
@@ -102,7 +99,6 @@ async def annotate_batch(
     output_path: Path,
     concurrency: int,
     total_done: int,
-    verbose: bool = False,
 ) -> list[DreamResult]:
     semaphore = asyncio.Semaphore(concurrency)
     results: list[DreamResult | None] = [None] * len(texts)
@@ -116,8 +112,8 @@ async def annotate_batch(
                 result: DreamResult = await annotate(text, tid)
                 results[i] = result
             except Exception as e:
-                if verbose:
-                    _log(f"[ERROR] [{i}] {e}")
+                sys.stderr.write(f"[ERROR] [{i}] {e}\n")
+                sys.stderr.flush()
                 results[i] = DreamResult(
                     task_id=tid, text=text,
                     final_label="0", confidence=0.0,
@@ -134,10 +130,12 @@ async def annotate_batch(
                 done_total = total_done + completed
                 agree = sum(1 for r in results if r and r.reached_agreement)
                 human = sum(1 for r in results if r and r.needs_human)
-                if verbose:
-                    _log(f"[INFO] {done_total} done | batch {completed}/{len(texts)} "
-                         f"| errors={errors} | agree={agree} | human_escal={human} "
-                         f"| {rate:.1f}/min")
+                sys.stderr.write(
+                    f"[INFO] {done_total} done | batch {completed}/{len(texts)} "
+                    f"| errors={errors} | agree={agree} | human_escal={human} "
+                    f"| {rate:.1f}/min\n"
+                )
+                sys.stderr.flush()
 
     await asyncio.gather(*[
         run(i, t, tid)
@@ -153,28 +151,15 @@ async def main():
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--concurrency", type=int, default=1)
     parser.add_argument("--limit", type=int, default=0, help="Limit rows (0 = all)")
-    parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
-
-    verbose = args.verbose
-
-    # Non-verbose: loguru to stderr (background)
-    # Verbose: plain print() + flush=True for Kaggle cell visibility
-    if verbose:
-        _log("[INFO] Starting DREAM pipeline...")
 
     config = get_config(str(args.config))
 
-    if verbose:
-        _log(f"[INFO] Config: {config.task.name} | model: {config.nvidia.model}")
-        _log(f"[INFO] Debate: {config.dream.debate.max_rounds} rounds | "
-             f"Moderator: {config.dream.moderator.enabled} | "
-             f"Escalation: {config.dream.escalation.enabled}")
-    else:
-        logger.info(f"Config: {config.task.name} | model: {config.nvidia.model}")
-        logger.info(f"Debate: {config.dream.debate.max_rounds} rounds | "
-                    f"Moderator: {config.dream.moderator.enabled} | "
-                    f"Escalation: {config.dream.escalation.enabled}")
+    sys.stderr.write(f"[INFO] Config: {config.task.name} | model: {config.nvidia.model}\n")
+    sys.stderr.write(f"[INFO] Debate: {config.dream.debate.max_rounds} rounds | "
+                     f"Moderator: {config.dream.moderator.enabled} | "
+                     f"Escalation: {config.dream.escalation.enabled}\n")
+    sys.stderr.flush()
 
     text_col = config.task.text_column
     texts, ids = load_csv(args.input, text_col)
@@ -182,24 +167,17 @@ async def main():
     done_ids = load_done_ids(args.output)
     pending = [(t, i) for t, i in zip(texts, ids) if i not in done_ids]
     total_done = len(done_ids)
-
-    if verbose:
-        _log(f"[INFO] Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}")
-    else:
-        logger.info(f"Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}")
+    sys.stderr.write(f"[INFO] Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}\n")
+    sys.stderr.flush()
 
     if args.limit > 0:
         pending = pending[:args.limit]
-        if verbose:
-            _log(f"[INFO] Limit: {args.limit}")
-        else:
-            logger.info(f"Limit: {args.limit}")
+        sys.stderr.write(f"[INFO] Limit: {args.limit}\n")
+        sys.stderr.flush()
 
     if not pending:
-        if verbose:
-            _log("[INFO] Nothing to do.")
-        else:
-            logger.info("Nothing to do.")
+        sys.stderr.write("[INFO] Nothing to do.\n")
+        sys.stderr.flush()
         return
 
     texts_p, ids_p = zip(*pending)
@@ -209,7 +187,6 @@ async def main():
         output_path=args.output,
         concurrency=args.concurrency,
         total_done=total_done,
-        verbose=verbose,
     )
 
     label_1 = sum(1 for r in results if r.final_label == "1")
@@ -219,24 +196,15 @@ async def main():
     errors = sum(1 for r in results if r.confidence == 0.0)
     total = len(results)
 
-    if verbose:
-        _log("=" * 50)
-        _log("[INFO] DONE")
-        _log(f"[INFO] Processed: {total}")
-        _log(f"[INFO] Label 1:   {label_1} ({label_1/total*100:.1f}%)")
-        _log(f"[INFO] Label 0:   {label_0} ({label_0/total*100:.1f}%)")
-        _log(f"[INFO] Agreement: {agree} ({agree/total*100:.1f}%)")
-        _log(f"[INFO] Human esc: {human} ({human/total*100:.1f}%)")
-        _log(f"[INFO] Errors:    {errors}")
-    else:
-        logger.info("=" * 50)
-        logger.info("DONE")
-        logger.info(f"  Processed: {total}")
-        logger.info(f"  Label 1:   {label_1} ({label_1/total*100:.1f}%)")
-        logger.info(f"  Label 0:   {label_0} ({label_0/total*100:.1f}%)")
-        logger.info(f"  Agreement: {agree} ({agree/total*100:.1f}%)")
-        logger.info(f"  Human esc: {human} ({human/total*100:.1f}%)")
-        logger.info(f"  Errors:    {errors}")
+    sys.stderr.write("=" * 50 + "\n")
+    sys.stderr.write("[INFO] DONE\n")
+    sys.stderr.write(f"[INFO] Processed: {total}\n")
+    sys.stderr.write(f"[INFO] Label 1:   {label_1} ({label_1/total*100:.1f}%)\n")
+    sys.stderr.write(f"[INFO] Label 0:   {label_0} ({label_0/total*100:.1f}%)\n")
+    sys.stderr.write(f"[INFO] Agreement: {agree} ({agree/total*100:.1f}%)\n")
+    sys.stderr.write(f"[INFO] Human esc: {human} ({human/total*100:.1f}%)\n")
+    sys.stderr.write(f"[INFO] Errors:    {errors}\n")
+    sys.stderr.flush()
 
 
 if __name__ == "__main__":
