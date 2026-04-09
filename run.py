@@ -28,6 +28,14 @@ from src.pipeline import annotate, DreamResult
 DATA_DIR = Path("data")
 
 
+def _setup_verbose_logging():
+    """Set up logging to stdout for Kaggle cell visibility."""
+    logger.remove()
+    logger.add(sys.stdout, level="DEBUG", colorize=True,
+               format="<level>{time:HH:mm:ss} | {level}</level> | {message}",
+               enqueue=False, flush=True)
+
+
 def load_done_ids(output_path: Path) -> set[str]:
     """Read task_ids already annotated (for resume)."""
     if not output_path.exists():
@@ -149,7 +157,6 @@ async def annotate_batch(
 
 
 async def main():
-    print("[VERBOSE MODE] Starting DREAM pipeline...", file=sys.stderr, flush=True)
     parser = argparse.ArgumentParser(description="DREAM — Multi-Agent Debate Annotation")
     parser.add_argument("--input", type=Path, default=DATA_DIR / "train.csv")
     parser.add_argument("--output", type=Path, default=DATA_DIR / "annotated.csv")
@@ -160,8 +167,7 @@ async def main():
     args = parser.parse_args()
 
     if args.verbose:
-        logger.remove()
-        logger.add(sys.stderr, level="DEBUG", colorize=True, format="<level>{time:HH:mm:ss} | {level}</level> | {message}", enqueue=False)
+        _setup_verbose_logging()
 
     config = get_config(str(args.config))
     logger.info(f"Config: {config.task.name} | model: {config.nvidia.model}")
