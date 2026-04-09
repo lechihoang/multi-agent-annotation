@@ -149,6 +149,7 @@ async def annotate_batch(
 
 
 async def main():
+    print("[VERBOSE MODE] Starting DREAM pipeline...", file=sys.stderr, flush=True)
     parser = argparse.ArgumentParser(description="DREAM — Multi-Agent Debate Annotation")
     parser.add_argument("--input", type=Path, default=DATA_DIR / "train.csv")
     parser.add_argument("--output", type=Path, default=DATA_DIR / "annotated.csv")
@@ -160,7 +161,7 @@ async def main():
 
     if args.verbose:
         logger.remove()
-        logger.add(lambda msg: print(msg, end="", file=sys.stderr), level="DEBUG", colorize=True)
+        logger.add(sys.stderr, level="DEBUG", colorize=True, format="<level>{time:HH:mm:ss} | {level}</level> | {message}", enqueue=False)
 
     config = get_config(str(args.config))
     logger.info(f"Config: {config.task.name} | model: {config.nvidia.model}")
