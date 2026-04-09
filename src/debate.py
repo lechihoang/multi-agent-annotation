@@ -111,6 +111,7 @@ async def run_agent_turn(
         response_model=DebateTurn,
         temperature=config.dream.llm.temperature,
         max_tokens=config.dream.llm.max_tokens,
+        max_retries=5,
     )
 
     logger.info(
@@ -197,6 +198,7 @@ async def run_moderator(text: str, rounds: List[DebateRound], config) -> Moderat
         response_model=ModeratorSummary,
         temperature=0.0,
         max_tokens=512,
+        max_retries=5,
     )
 
     logger.info(f"[Moderator] → closer_to_label={result.closer_to_label}")
@@ -244,6 +246,7 @@ async def run_adjudicator(
         response_model=AdjudicationResult,
         temperature=config.dream.adjudicator.temperature,
         max_tokens=config.dream.adjudicator.max_tokens,
+        max_retries=5,
     )
 
     logger.info(

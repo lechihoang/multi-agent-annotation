@@ -7,6 +7,8 @@ Round-robin: picks the least-recently-used key on each request.
 import asyncio
 import time
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from loguru import logger
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage

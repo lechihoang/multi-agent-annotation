@@ -12,7 +12,7 @@ nvidia:
   base_url: "https://integrate.api.nvidia.com/v1"
   temperature: 0.0
   top_p: 0.7
-  max_tokens: 2048
+  max_tokens: 4096
   stream: false
   max_retries: 5
   rate_limit: 40
@@ -139,7 +139,7 @@ dream:
   # ── Adjudicator ──────────────────────────────────────────────────────────
   adjudicator:
     temperature: 0.0
-    max_tokens: 1024
+    max_tokens: 2048
     system: |
       You are the Adjudicator — a neutral expert making the final decision.
       Evaluate the debate history and comment objectively.
@@ -167,7 +167,7 @@ dream:
   # ── LLM Settings ────────────────────────────────────────────────────────
   llm:
     temperature: 0.0
-    max_tokens: 2048
+    max_tokens: 4096
 
 # ---------------------------------------------------------------------------
 # Logging

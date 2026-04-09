@@ -10,7 +10,10 @@ from pydantic import BaseModel, Field
 class DebateTurn(BaseModel):
     """Single turn from one agent."""
 
-    agent: str = Field(description="Agent name: Agent_A or Agent_B")
+    agent: Optional[str] = Field(
+        default=None,
+        description="Agent name: Agent_A or Agent_B (may be omitted in output)",
+    )
     label: str = Field(description="Label decision: 0 or 1", pattern=r"^[01]$")
     evidence: str = Field(description="Quoted evidence from the text")
     argument: str = Field(description="Reasoning/argument in Vietnamese or English")
