@@ -159,7 +159,7 @@ async def main():
 
     if args.verbose:
         logger.remove()
-        logger.add(lambda msg: print(msg, end="", flush=True), level="DEBUG", colorize=True)
+        logger.add(lambda msg: print(msg, end=""), level="DEBUG", colorize=True)
 
     config = get_config(str(args.config))
     logger.info(f"Config: {config.task.name} | model: {config.nvidia.model}")
