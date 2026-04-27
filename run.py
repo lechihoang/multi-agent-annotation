@@ -9,20 +9,19 @@ Based on arXiv:2602.06526 - DREAM: Multi-Agent Debate for NLP Classification
 import argparse
 import asyncio
 import csv
-import hashlib
 import sys
 import time
 import uuid
 from pathlib import Path
+import logging
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from loguru import logger
-
 from src.config import get_config
 from src.pipeline import annotate, DreamResult
+from src.logging_setup import setup_logging
 
 DATA_DIR = Path("data")
 
@@ -34,24 +33,28 @@ def load_done_ids(output_path: Path) -> set[str]:
     with open(output_path, encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             tid = row.get("task_id", "").strip()
-            if tid and row.get("final_label", ""):
+            final_label = str(row.get("final_label", "")).strip()
+            needs_human = str(row.get("needs_human", "")).strip().lower() == "true"
+            if tid and (final_label != "" or needs_human):
                 done.add(tid)
     sys.stderr.write(f"[INFO] Resume: {len(done)} already done in {output_path}\n")
     sys.stderr.flush()
     return done
 
 
-def _text_to_id(text: str) -> str:
-    """Deterministic task_id from text content — enables proper resume/dedup across runs."""
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, text))
+def _text_to_id(text: str, row_index: int, source_name: str) -> str:
+    """Deterministic task_id from (source, row_index, text) for robust resume with duplicate texts."""
+    payload = f"{source_name}|{row_index}|{text}"
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, payload))
 
 
 def load_csv(path: Path, text_col: str):
     texts, ids = [], []
     with open(path, encoding="utf-8-sig") as f:
         for idx, row in enumerate(csv.DictReader(f)):
-            texts.append(row[text_col])
-            ids.append(_text_to_id(row[text_col]))
+            text = row[text_col]
+            texts.append(text)
+            ids.append(_text_to_id(text, idx, path.name))
     return texts, ids
 
 
@@ -99,10 +102,41 @@ def write_result(result: DreamResult, path: Path):
         })
 
 
+def write_human_queue(result: DreamResult, path: Path):
+    fieldnames = [
+        "task_id", "text", "final_label", "confidence", "reasoning",
+        "reached_agreement", "agreement_round", "needs_human",
+        "agent_a_argument", "agent_a_evidence",
+        "agent_b_argument", "agent_b_evidence",
+        "debate_rounds_count",
+    ]
+    write_header = not path.exists()
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        if write_header:
+            writer.writeheader()
+        writer.writerow({
+            "task_id": result.task_id,
+            "text": result.text,
+            "final_label": result.final_label,
+            "confidence": result.confidence,
+            "reasoning": result.reasoning,
+            "reached_agreement": result.reached_agreement,
+            "agreement_round": result.agreement_round or "",
+            "needs_human": result.needs_human,
+            "agent_a_argument": result.agent_a_final_argument,
+            "agent_a_evidence": result.agent_a_final_evidence,
+            "agent_b_argument": result.agent_b_final_argument,
+            "agent_b_evidence": result.agent_b_final_evidence,
+            "debate_rounds_count": len(result.debate_rounds),
+        })
+
+
 async def annotate_batch(
     texts: list[str],
     task_ids: list[str],
     output_path: Path,
+    escalated_output_path: Path,
     concurrency: int,
     total_done: int,
 ) -> list[DreamResult]:
@@ -130,6 +164,8 @@ async def annotate_batch(
             finally:
                 if results[i]:
                     write_result(results[i], output_path)
+                    if results[i].needs_human:
+                        write_human_queue(results[i], escalated_output_path)
                 completed += 1
                 elapsed = time.monotonic() - start
                 rate = completed / elapsed * 60 if elapsed > 0 else 0
@@ -160,15 +196,24 @@ async def main():
     args = parser.parse_args()
 
     config = get_config(str(args.config))
+    setup_logging(config.logging_level)
+    logger = logging.getLogger(__name__)
 
     sys.stderr.write(f"[INFO] Config: {config.task.name} | model: {config.nvidia.model}\n")
     sys.stderr.write(f"[INFO] Debate: {config.dream.debate.max_rounds} rounds | "
                      f"Moderator: {config.dream.moderator.enabled} | "
-                     f"Escalation: {config.dream.escalation.enabled}\n")
+                     f"Escalation mode: {config.dream.escalation.mode}\n")
     sys.stderr.flush()
+    logger.info(
+        "Starting run | input=%s output=%s concurrency=%s",
+        args.input,
+        args.output,
+        args.concurrency,
+    )
 
     text_col = config.task.text_column
     texts, ids = load_csv(args.input, text_col)
+    escalated_output_path = Path(config.dream.escalation.export_file)
 
     done_ids = load_done_ids(args.output)
     pending = [(t, i) for t, i in zip(texts, ids) if i not in done_ids]
@@ -191,6 +236,7 @@ async def main():
         texts=list(texts_p),
         task_ids=list(ids_p),
         output_path=args.output,
+        escalated_output_path=escalated_output_path,
         concurrency=args.concurrency,
         total_done=total_done,
     )
@@ -199,7 +245,7 @@ async def main():
     label_0 = sum(1 for r in results if r.final_label == "0")
     agree = sum(1 for r in results if r.reached_agreement)
     human = sum(1 for r in results if r.needs_human)
-    errors = sum(1 for r in results if r.confidence == 0.0)
+    errors = sum(1 for r in results if r.reasoning.startswith("Error:"))
     total = len(results)
 
     sys.stderr.write("=" * 50 + "\n")

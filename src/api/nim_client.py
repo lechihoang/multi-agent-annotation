@@ -1,7 +1,7 @@
 """
 NIM Client — NVIDIA NIM API with multi-key support.
-Reads NVIDIA_API_KEYS env var (comma-separated) for key pooling.
-Round-robin: picks the least-recently-used key on each request.
+Reads NVIDIA_API_KEY env var (single key or comma-separated keys) for key pooling.
+Round-robin distribution + centralized retry behavior via BaseLLMClient.
 """
 
 import asyncio
@@ -10,26 +10,24 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-from loguru import logger
+import logging
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
+from src.api.base_client import BaseLLMClient
+from src.config import get_config
 
-BASE_URL = "https://integrate.api.nvidia.com/v1"
-MODEL = "meta/llama-3.3-70b-instruct"
+logger = logging.getLogger(__name__)
 
 
 def _parse_keys() -> list[str]:
-    """Parse NVIDIA_API_KEYS env var (comma-separated) or fall back to single key."""
-    keys_str = os.getenv("NVIDIA_API_KEYS", "")
+    """Parse NVIDIA_API_KEY env var (supports comma-separated values)."""
+    keys_str = os.getenv("NVIDIA_API_KEY", "")
     if keys_str:
         keys = [k.strip() for k in keys_str.split(",") if k.strip()]
         if len(keys) >= 1:
             logger.info(f"Key pool: {len(keys)} keys detected")
             return keys
-    fallback = os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY", "")
-    if fallback:
-        return [fallback]
     return []
 
 
@@ -37,18 +35,28 @@ def _parse_keys() -> list[str]:
 # Per-key client
 # ---------------------------------------------------------------------------
 
-class _KeyClient:
+class _KeyClient(BaseLLMClient):
     """One ChatOpenAI instance bound to one API key."""
 
-    def __init__(self, api_key: str, rate_limit: int):
+    def __init__(
+        self,
+        api_key: str,
+        rate_limit: int,
+        max_retries: int,
+        model: str,
+        base_url: str,
+        default_max_tokens: int,
+    ):
+        super().__init__(max_retries=max_retries)
         self.api_key = api_key
         self.rate_limit = rate_limit
+        self.default_max_tokens = default_max_tokens
         self.llm = ChatOpenAI(
-            model=MODEL,
+            model=model,
             api_key=api_key,
-            base_url=BASE_URL,
+            base_url=base_url,
             temperature=0.0,
-            max_tokens=4096,
+            max_tokens=default_max_tokens,
             max_retries=0,
         )
         self._lock = asyncio.Lock()
@@ -81,10 +89,10 @@ class _KeyClient:
     ) -> str | BaseModel:
         await self._wait()
 
-        last_error = None
-        current_max_tokens = max_tokens or 4096
+        current_max_tokens = max_tokens or self.default_max_tokens
 
-        for attempt in range(max_retries + 1):
+        async def _invoke():
+            nonlocal current_max_tokens
             try:
                 kwargs = {"temperature": temperature} if temperature is not None else {}
                 kwargs["max_tokens"] = current_max_tokens
@@ -101,23 +109,18 @@ class _KeyClient:
                     result = result.content
 
                 return result
-
-            except Exception as e:
-                last_error = e
+            except Exception as e:  # noqa: BLE001
                 err_str = str(e).lower()
                 if "length" in err_str or "maximum context" in err_str:
-                    current_max_tokens = int(current_max_tokens * 1.5)
-                    logger.warning(f"[{self.api_key[:12]}...] Retry {attempt+1} (length): {e}")
-                elif "429" in err_str or "rate limit" in err_str or "too many requests" in err_str:
-                    logger.warning(f"[{self.api_key[:12]}...] Retry {attempt+1} (429): {e}")
-                elif "504" in err_str or "gateway timeout" in err_str:
-                    logger.warning(f"[{self.api_key[:12]}...] Retry {attempt+1} (504): {e}")
-                else:
-                    logger.warning(f"[{self.api_key[:12]}...] Retry {attempt+1}: {e}")
+                    current_max_tokens = max(128, int(current_max_tokens * 0.7))
+                    logger.warning(
+                        "[%s...] context/length hit -> max_tokens=%s",
+                        self.api_key[:12],
+                        current_max_tokens,
+                    )
+                raise
 
-                await asyncio.sleep(5 * (2 ** attempt))
-
-        raise last_error
+        return await self._retry(_invoke, max_retries=max_retries)
 
 
 # ---------------------------------------------------------------------------
@@ -130,21 +133,29 @@ class NimClient:
     Uses round-robin to distribute requests across keys.
     """
 
-    def __init__(
-        self,
-        rate_limit: int = 40,
-        max_retries: int = 5,
-    ):
+    def __init__(self, rate_limit: int = 40, max_retries: int = 5):
         keys = _parse_keys()
         if not keys:
-            raise ValueError("No NVIDIA API key found. Set NVIDIA_API_KEY or NVIDIA_API_KEYS env var.")
+            raise ValueError("No NVIDIA API key found. Set NVIDIA_API_KEY env var.")
+
+        cfg = get_config()
+        model = cfg.nvidia.model
+        base_url = cfg.nvidia.base_url
+        default_max_tokens = cfg.nvidia.max_tokens
 
         self._clients: list[_KeyClient] = [
-            _KeyClient(k, rate_limit) for k in keys
+            _KeyClient(
+                k,
+                rate_limit,
+                max_retries=max_retries,
+                model=model,
+                base_url=base_url,
+                default_max_tokens=default_max_tokens,
+            )
+            for k in keys
         ]
         self._pool_size = len(self._clients)
         self._round_robin = 0
-        self._lock = asyncio.Lock()
         logger.info(f"NimClient pool: {self._pool_size} keys, {rate_limit} req/min each")
 
     def _pick_client(self) -> _KeyClient:

@@ -1,176 +1,186 @@
-# =============================================================================
-# DREAM Configuration — UIT-ViCTSD Constructiveness Detection
-# Dataset: arXiv:2103.10069 - Vietnamese Constructive and Toxic Speech Detection
-# Task: Binary classification (Constructive vs Non-constructive)
-# =============================================================================
-
-# ---------------------------------------------------------------------------
-# LLM Settings
-# ---------------------------------------------------------------------------
 nvidia:
-  model: "meta/llama-3.3-70b-instruct"
-  base_url: "https://integrate.api.nvidia.com/v1"
+  model: qwen/qwen3-next-80b-a3b-instruct
+  base_url: https://integrate.api.nvidia.com/v1
   temperature: 0.0
   top_p: 0.7
-  max_tokens: 4096
+  max_tokens: 2048
   stream: false
   max_retries: 5
   rate_limit: 40
-
-# ---------------------------------------------------------------------------
-# Task Definition — UIT-ViCTSD Constructiveness
-# ---------------------------------------------------------------------------
 task:
-  name: "victsd_constructiveness"
-  text_column: "Comment"
-  label_column: "Constructiveness"
+  name: victsd_constructiveness
+  text_column: Comment
+  label_column: Constructiveness
   labels:
-    "0": "Non-constructive — Little information, only simple emotions, no meaningful contribution."
-    "1": "Constructive — Reinforces point of view, provides information and particularized opinions, promotes the topic."
-
-# ---------------------------------------------------------------------------
-# DREAM Pipeline
-# ---------------------------------------------------------------------------
+    '0': Non-constructive — Little information, only simple emotions, no meaningful
+      contribution.
+    '1': Constructive — Reinforces point of view, provides information and particularized
+      opinions, promotes the topic.
 dream:
   enabled: true
-
-  # ── Debate Parameters ─────────────────────────────────────────────────────
   debate:
     max_rounds: 2
     temperature: 0.0
+  guidelines: "<guidelines>\nTASK: Classify Vietnamese social media comments as Constructive\
+    \ (1) or Non-constructive (0).\n\nLabel 1 — Constructive:\n- Comments that reinforce\
+    \ the writer's point of view\n- Provide specific information and particularized\
+    \ opinions\n- Contribute to promoting the topic\n- Often longer, detailed explanations\n\
+    \nLabel 0 — Non-constructive:\n- Little to no useful information\n- Only express\
+    \ simple emotions (e.g., \"I hope you get well\", \"Nice!\")\n- No meaningful\
+    \ contribution to the discussion\n\nEXAMPLES FROM PAPER:\n\nLabel 1 (Constructive):\n\
+    - \"Nội dung bài viết là câu trả lời đơn giản cho câu hỏi... cả thế giới đều thế\
+    \ thì khó mà mong đến việc giữ vững tốc độ tăng trưởng kinh tế!\"\n  (Long explanatory\
+    \ comment with specific information and opinion)\n\nLabel 0 (Non-constructive):\n\
+    - \"Cầu mong ông sớm khỏe mạnh\" (I hope you get well soon — simple emotion, no\
+    \ contribution)\n- \"70% cơ thể người là nước mà!\" (70% of human body is water\
+    \ — random fact, no contribution)\n\nIMPORTANT:\n- Do NOT confuse length with\
+    \ constructiveness. A short comment can be constructive if it provides a specific\
+    \ opinion.\n- Simple well-wishes = Label 0 (no contribution)\n- Questions seeking\
+    \ clarification can be Label 1 if they add context\n- Comments with specific data/facts/examples\
+    \ = likely Label 1\n- You must quote brief, decisive evidence from the comment\
+    \ text.\n- Keep reasoning concise and focused only on the label criteria.\n</guidelines>\n"
+  agent_a_system: 'You are Agent_A — a Vietnamese language expert specializing in
+    constructive speech detection.
 
-  # ── Guidelines (from paper Section 3.1) ──────────────────────────────────
-  guidelines: |
-    <guidelines>
-    TASK: Classify Vietnamese social media comments as Constructive (1) or Non-constructive (0).
+    Your task: classify social media comments as Constructive (1) or Non-constructive
+    (0).
 
-    Label 1 — Constructive:
-    - Comments that reinforce the writer's point of view
-    - Provide specific information and particularized opinions
-    - Contribute to promoting the topic
-    - Often longer, detailed explanations
-
-    Label 0 — Non-constructive:
-    - Little to no useful information
-    - Only express simple emotions (e.g., "I hope you get well", "Nice!")
-    - No meaningful contribution to the discussion
-
-    EXAMPLES FROM PAPER:
-
-    Label 1 (Constructive):
-    - "Nội dung bài viết là câu trả lời đơn giản cho câu hỏi... cả thế giới đều thế thì khó mà mong đến việc giữ vững tốc độ tăng trưởng kinh tế!"
-      (Long explanatory comment with specific information and opinion)
-
-    Label 0 (Non-constructive):
-    - "Cầu mong ông sớm khỏe mạnh" (I hope you get well soon — simple emotion, no contribution)
-    - "70% cơ thể người là nước mà!" (70% of human body is water — random fact, no contribution)
-
-    IMPORTANT:
-    - Do NOT confuse length with constructiveness. A short comment can be constructive if it provides a specific opinion.
-    - Simple well-wishes = Label 0 (no contribution)
-    - Questions seeking clarification can be Label 1 if they add context
-    - Comments with specific data/facts/examples = likely Label 1
-    </guidelines>
-
-  # ── Agent System Prompts ──────────────────────────────────────────────────
-  agent_a_system: |
-    You are Agent_A — a Vietnamese language expert specializing in constructive speech detection.
-    Your task: classify social media comments as Constructive (1) or Non-constructive (0).
     You may agree or disagree with Label 1 based on your analysis.
+
     {guidelines}
 
-  agent_b_system: |
-    You are Agent_B — a Vietnamese language expert specializing in constructive speech detection.
-    Your task: classify social media comments as Constructive (1) or Non-constructive (0).
+    '
+  agent_b_system: 'You are Agent_B — a Vietnamese language expert specializing in
+    constructive speech detection.
+
+    Your task: classify social media comments as Constructive (1) or Non-constructive
+    (0).
+
     You may agree or disagree with Label 0 based on your analysis.
+
     {guidelines}
 
-  # ── User Prompt Templates ────────────────────────────────────────────────
-  agent_user_template: |
-    Task: Classify the following Vietnamese social media comment.
+    '
+  agent_user_template: 'Task: Classify the following Vietnamese social media comment.
+
 
     Comment:
+
     {text}
 
+
     Options:
+
     {labels}
 
+
     Your current position: {stance}
+
     Analyze the comment carefully and decide the correct label.
 
+    Quote the decisive phrase from the comment as evidence.
+
+    Keep your argument concise (max ~90 words).
+
+
     Respond with: label (0 or 1), evidence, argument.
 
-  agent_roundN_template: |
-    Task: Classify the following Vietnamese social media comment.
+    '
+  agent_roundN_template: 'Task: Classify the following Vietnamese social media comment.
+
 
     Comment:
+
     {text}
 
+
     Options:
+
     {labels}
+
 
     Your current position: {stance}
 
+
     Previous debate rounds:
+
     {history}
 
+
     Read the debate history carefully.
-    - Rebut or acknowledge the opposing agent's arguments.
+
+    - Rebut or acknowledge the opposing agent''s arguments.
+
     - Update or defend your position based on the evidence.
+
     Quote specific evidence from the comment to support your reasoning.
+
+    Keep your argument concise (max ~90 words).
+
 
     Respond with: label (0 or 1), evidence, argument.
 
-  # ── Moderator ─────────────────────────────────────────────────────────────
+    '
   moderator:
     enabled: true
-    system: |
-      You are a moderator reviewing a debate about Vietnamese social media comment classification.
+    system: 'You are a moderator reviewing a debate about Vietnamese social media
+      comment classification.
+
       Identify the main points of disagreement between Agent_A and Agent_B.
+
       Summarize: (1) what they agree on, (2) what they disagree on.
-    user_template: |
-      Comment: {text}
+
+      '
+    user_template: 'Comment: {text}
+
 
       Debate history:
+
       {history}
+
 
       Summarize the key points of disagreement and areas of agreement.
 
-  # ── Adjudicator ──────────────────────────────────────────────────────────
+      '
   adjudicator:
     temperature: 0.0
-    max_tokens: 2048
-    system: |
-      You are the Adjudicator — a neutral expert making the final decision.
+    max_tokens: 1024
+    system: 'You are the Adjudicator — a neutral expert making the final decision.
+
       Evaluate the debate history and comment objectively.
+
       {guidelines}
-    user_template: |
-      Comment to classify:
+
+      '
+    user_template: 'Comment to classify:
+
       {text}
 
+
       Label definitions:
+
       {labels}
 
+
       Debate history:
+
       {history}
+
 
       Moderator notes: {moderator_notes}
 
-      Make the final decision. Respond with: final_label (0 or 1), confidence (0.0-1.0), reasoning.
 
-  # ── Human Escalation ────────────────────────────────────────────────────
+      Make the final decision. Respond with: final_label (0 or 1), confidence (0.0-1.0),
+      reasoning.
+
+      Keep reasoning concise (max ~120 words).
+
+      '
   escalation:
-    enabled: true
-    confidence_threshold: 0.7
-    export_file: "data/victsd_escalated.csv"
-
-  # ── LLM Settings ────────────────────────────────────────────────────────
+    mode: paper_strict_human
+    export_file: data/victsd_escalated.csv
   llm:
     temperature: 0.0
-    max_tokens: 4096
-
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
+    max_tokens: 1024
 logging:
-  level: "INFO"
+  level: INFO

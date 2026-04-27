@@ -5,7 +5,7 @@ Task-agnostic: swap config.yaml to run on different NLP classification tasks.
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 
 def _load_yaml(path: str = "config.yaml") -> Dict[str, Any]:
@@ -42,11 +42,6 @@ class NvidiaConfig:
     stream: bool = False
     max_retries: int = 5
     rate_limit: int = 40
-    api_key: str = field(
-        default_factory=lambda: (
-            os.getenv("NVIDIA_API_KEY", "") or os.getenv("NIM_API_KEY", "")
-        )
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -94,8 +89,7 @@ class AdjudicatorConfig:
 
 @dataclass
 class EscalationConfig:
-    enabled: bool = True
-    confidence_threshold: float = 0.7
+    mode: str = "fully_automatic"
     export_file: str = "data/escalated.csv"
 
 
@@ -181,8 +175,7 @@ def load_config(path: str = "config.yaml") -> Config:
                 user_template=adj.get("user_template", ""),
             ),
             escalation=EscalationConfig(
-                enabled=esc.get("enabled", True),
-                confidence_threshold=float(esc.get("confidence_threshold", 0.7)),
+                mode=esc.get("mode", "fully_automatic"),
                 export_file=esc.get("export_file", "data/escalated.csv"),
             ),
             debate=DebateConfig(

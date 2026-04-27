@@ -4,9 +4,8 @@ Handles: agent turns, rounds, moderator, adjudicator.
 """
 
 import asyncio
+import logging
 from typing import List
-
-from loguru import logger
 
 from .models import (
     DebateTurn,
@@ -16,6 +15,7 @@ from .models import (
 )
 from src.api.nim_client import get_nim_client
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Prompt builders
@@ -106,11 +106,15 @@ async def run_agent_turn(
 
     logger.debug(f"[{agent}] stance={stance_label}, history_rounds={len(history)}")
 
+    max_tokens = config.dream.llm.max_tokens
+    if history:
+        max_tokens = max(256, int(config.dream.llm.max_tokens * 0.75))
+
     result = await llm.chat_structured(
         messages=messages,
         response_model=DebateTurn,
         temperature=config.dream.llm.temperature,
-        max_tokens=config.dream.llm.max_tokens,
+        max_tokens=max_tokens,
         max_retries=5,
     )
 

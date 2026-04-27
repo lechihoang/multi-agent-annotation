@@ -9,9 +9,8 @@ Flow:
 """
 
 import uuid
+import logging
 from typing import Optional
-
-from loguru import logger
 
 from src.config import get_config
 from src.models import DreamResult, DebateRound, ModeratorSummary, AdjudicationResult
@@ -22,6 +21,14 @@ from src.debate import (
     calibrate_confidence,
 )
 
+logger = logging.getLogger(__name__)
+
+def _escalation_mode(config) -> str:
+    mode = (config.dream.escalation.mode or "fully_automatic").strip().lower()
+    if mode not in {"paper_strict_human", "fully_automatic"}:
+        logger.warning("Unknown escalation mode '%s', fallback to fully_automatic", mode)
+        return "fully_automatic"
+    return mode
 
 def _make_result(
     text: str,
@@ -84,6 +91,7 @@ async def annotate(
 
     rounds: list[DebateRound] = []
     max_rounds = config.dream.debate.max_rounds
+    mode = _escalation_mode(config)
 
     try:
         # Multi-round debate
@@ -121,8 +129,27 @@ async def annotate(
                     needs_human=False,
                 )
 
-        # No agreement → Adjudicator
+        # No agreement after max rounds
         logger.info(f"[DREAM] No agreement after {max_rounds} rounds | task={task_id}")
+
+        if mode == "paper_strict_human":
+            reasoning = (
+                f"No agreement after {max_rounds} rounds. "
+                "Marked for human review by paper_strict_human mode."
+            )
+            return _make_result(
+                text=text,
+                task_id=task_id,
+                final_label=rounds[-1].agent_a_turn.label,
+                confidence=0.0,
+                reasoning=reasoning,
+                reached_agreement=False,
+                agreement_round=None,
+                rounds=rounds,
+                moderator=None,
+                adjudication=None,
+                needs_human=True,
+            )
 
         moderator: Optional[ModeratorSummary] = None
         moderator_text = "(No moderator)"
@@ -149,17 +176,6 @@ async def annotate(
             adjudication=adjudication,
         )
 
-        needs_human = (
-            config.dream.escalation.enabled
-            and adjudication.confidence < config.dream.escalation.confidence_threshold
-        )
-
-        if needs_human:
-            logger.warning(
-                f"[DREAM] Low confidence {adjudication.confidence} < "
-                f"{config.dream.escalation.confidence_threshold} → human escalation"
-            )
-
         reasoning = (
             f"No agreement after {max_rounds} rounds. "
             f"Adjudicator → Label {adjudication.final_label} "
@@ -178,7 +194,7 @@ async def annotate(
             rounds=rounds,
             moderator=moderator,
             adjudication=adjudication,
-            needs_human=needs_human,
+            needs_human=False,
         )
 
     except Exception as e:
