@@ -42,6 +42,69 @@ def load_done_ids(output_path: Path) -> set[str]:
     return done
 
 
+def load_human_done_ids(human_file: Path) -> set[str]:
+    if not human_file.exists():
+        return set()
+    done = set()
+    with open(human_file, encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            tid = str(row.get("task_id", "")).strip()
+            final_label = str(row.get("final_label", "")).strip()
+            if tid and final_label != "":
+                done.add(tid)
+    if done:
+        sys.stderr.write(f"[INFO] Human labels loaded: {len(done)} from {human_file}\n")
+        sys.stderr.flush()
+    return done
+
+
+def write_human_review_file(result: DreamResult, human_file: Path):
+    fieldnames = [
+        "task_id", "text", "final_label", "confidence", "reasoning",
+        "agent_a_argument", "agent_a_evidence",
+        "agent_b_argument", "agent_b_evidence",
+        "human_label", "human_note",
+    ]
+    write_header = not human_file.exists()
+    with open(human_file, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        if write_header:
+            writer.writeheader()
+        writer.writerow({
+            "task_id": result.task_id,
+            "text": result.text,
+            "final_label": result.final_label,
+            "confidence": result.confidence,
+            "reasoning": result.reasoning,
+            "agent_a_argument": result.agent_a_final_argument,
+            "agent_a_evidence": result.agent_a_final_evidence,
+            "agent_b_argument": result.agent_b_final_argument,
+            "agent_b_evidence": result.agent_b_final_evidence,
+            "human_label": "",
+            "human_note": "",
+        })
+
+
+def prune_human_review_file(human_file: Path, done_human_ids: set[str]):
+    if not human_file.exists() or not done_human_ids:
+        return
+    with open(human_file, encoding="utf-8-sig") as f:
+        rows = list(csv.DictReader(f))
+        fieldnames = rows[0].keys() if rows else []
+    kept = [r for r in rows if str(r.get("task_id", "")).strip() not in done_human_ids]
+    if len(kept) == len(rows):
+        return
+    with open(human_file, "w", encoding="utf-8", newline="") as f:
+        if fieldnames:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(kept)
+    sys.stderr.write(
+        f"[INFO] Human review queue pruned: removed {len(rows) - len(kept)} resolved rows from {human_file}\n"
+    )
+    sys.stderr.flush()
+
+
 def _text_to_id(text: str, row_index: int, source_name: str) -> str:
     """Deterministic task_id from (source, row_index, text) for robust resume with duplicate texts."""
     payload = f"{source_name}|{row_index}|{text}"
@@ -166,6 +229,9 @@ async def annotate_batch(
                     write_result(results[i], output_path)
                     if results[i].needs_human:
                         write_human_queue(results[i], escalated_output_path)
+                        write_human_review_file(results[i], escalated_output_path.with_name(
+                            f"{escalated_output_path.stem}_for_human_labeling{escalated_output_path.suffix}"
+                        ))
                 completed += 1
                 elapsed = time.monotonic() - start
                 rate = completed / elapsed * 60 if elapsed > 0 else 0
@@ -216,6 +282,12 @@ async def main():
     escalated_output_path = Path(config.dream.escalation.export_file)
 
     done_ids = load_done_ids(args.output)
+    human_done_file = escalated_output_path.with_name(
+        f"{escalated_output_path.stem}_for_human_labeling{escalated_output_path.suffix}"
+    )
+    done_human_ids = load_human_done_ids(human_done_file)
+    prune_human_review_file(human_done_file, done_human_ids)
+    done_ids |= done_human_ids
     pending = [(t, i) for t, i in zip(texts, ids) if i not in done_ids]
     total_done = len(done_ids)
     sys.stderr.write(f"[INFO] Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}\n")
