@@ -1,0 +1,4 @@
+task_id,text,final_label,confidence,reasoning,agent_a_argument,agent_a_evidence,agent_b_argument,agent_b_evidence,human_label,human_note
+9e8de245-3cfc-5fc0-9ea1-e59c97c39400,Nhìn hình sao thấy mảnh khảnh quá :),0,0.0,"Error: 1 validation error for DebateTurn
+  Invalid JSON: EOF while parsing an object at line 1 column 1 [type=json_invalid, input_value='{', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid",,,,,,
