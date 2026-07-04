@@ -23,36 +23,23 @@ dream:
 
 
     Label 1 (Constructive):
-
-    - The comment provides lots of information and particularized opinions.
-
-    - It contributes to promoting the topic and reinforces a specific point of view.
-
-    - Constructive comments are typically longer and detailed, offering substance
-    beyond mere reaction.
-
+    - The comment provides concrete, detailed information, objective analysis, or a highly specific, actionable solution.
+    - It contributes meaningfully to the topic beyond surface-level reactions.
+    - Constructive comments are typically longer and detailed, offering substance beyond mere reaction.
 
     Label 0 (Non-constructive):
-
-    - The comment has little information.
-
-    - It is only about expressing simple emotions (e.g., pure praise, anger, sympathy)
-    and does not have much analytical meaning.
-
-    - Vague reactions, short exclamations, or generic well-wishes fall here.
-
+    - The comment has little meaningful information or is purely subjective.
+    - It expresses simple emotions (pure praise, anger, sympathy, congratulations, frustration).
+    - It contains generic advice, vague requests to authorities (e.g., "mong chính quyền", "đề nghị"), or subjective correlations without evidence.
+    - It is a short exclamation, a generic opinion (e.g., "A là nhất", "B tệ quá"), or a metaphorical remark.
+    - Simply stating a fact about oneself or making a generic well-wish is 0.
 
     CRITICAL RULES:
-
-    1. Ask: "Does this comment provide specific information/opinions that promote
-    the topic?"
-
-    2. If it is just an emotional exclamation (even using specific nouns) with little
-    informational value, it is 0.
-
-    3. Quote the DECISIVE phrase showing the presence or lack of information.
-
-    4. Keep reasoning concise (max ~90 words).
+    1. Ask: "Does this comment provide *concrete* new information, objective analysis, or a *highly specific* logical argument?"
+    2. If it is a generic wish, complaint, praise, personal anecdote, or short subjective opinion, it MUST BE 0.
+    3. Do not over-interpret vague metaphors, rhetorical questions, or simple suggestions as constructive. If in doubt, lean towards 0.
+    4. Quote the DECISIVE phrase showing the presence or lack of concrete information.
+    5. Keep reasoning concise (max ~90 words).
 
     </guidelines>
 
@@ -173,8 +160,8 @@ dream:
 
       '
   adjudicator:
-    temperature: 0.0
-    max_tokens: 1024
+    temperature: 0.5
+    max_tokens: 4096
     system: 'You are the Adjudicator — a neutral, decisive expert making the final
       decision.
 
@@ -214,7 +201,7 @@ dream:
     mode: fully_automatic
     export_file: data/victsd_escalated.csv
   llm:
-    temperature: 0.0
-    max_tokens: 1024
+    temperature: 0.5
+    max_tokens: 4096
 logging:
   level: INFO

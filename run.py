@@ -63,31 +63,7 @@ def load_human_done_ids(human_file: Path) -> set[str]:
     return done
 
 
-def write_human_review_file(result: DreamResult, human_file: Path):
-    fieldnames = [
-        "task_id", "text", "final_label", "confidence", "reasoning",
-        "agent_a_argument", "agent_a_evidence",
-        "agent_b_argument", "agent_b_evidence",
-        "human_label", "human_note",
-    ]
-    write_header = not human_file.exists()
-    with open(human_file, "a", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        if write_header:
-            writer.writeheader()
-        writer.writerow({
-            "task_id": result.task_id,
-            "text": result.text,
-            "final_label": result.final_label,
-            "confidence": result.confidence,
-            "reasoning": result.reasoning,
-            "agent_a_argument": result.agent_a_final_argument,
-            "agent_a_evidence": result.agent_a_final_evidence,
-            "agent_b_argument": result.agent_b_final_argument,
-            "agent_b_evidence": result.agent_b_final_evidence,
-            "human_label": "",
-            "human_note": "",
-        })
+
 
 
 def prune_human_review_file(human_file: Path, done_human_ids: set[str]):
@@ -176,7 +152,7 @@ def write_human_queue(result: DreamResult, path: Path):
         "reached_agreement", "agreement_round", "needs_human",
         "agent_a_argument", "agent_a_evidence",
         "agent_b_argument", "agent_b_evidence",
-        "debate_rounds_count",
+        "debate_rounds_count", "human_label", "human_note"
     ]
     write_header = not path.exists()
     with open(path, "a", encoding="utf-8", newline="") as f:
@@ -197,6 +173,8 @@ def write_human_queue(result: DreamResult, path: Path):
             "agent_b_argument": result.agent_b_final_argument,
             "agent_b_evidence": result.agent_b_final_evidence,
             "debate_rounds_count": len(result.debate_rounds),
+            "human_label": "",
+            "human_note": "",
         })
 
 
@@ -220,32 +198,23 @@ async def annotate_batch(
                 result: DreamResult = await annotate(text, tid)
                 results[i] = result
             except Exception as e:
-                sys.stderr.write(f"[ERROR] [{i}] {e}\n")
-                sys.stderr.flush()
-                results[i] = DreamResult(
-                    task_id=tid, text=text,
-                    final_label="0", confidence=0.0,
-                    reasoning=f"Error: {str(e)}",
-                    reached_agreement=False,
-                )
-                errors += 1
+                print(f"[ERROR] [{tid}] {e}")
+                raise e
             finally:
                 if results[i]:
                     write_result(results[i], output_path)
                     if results[i].needs_human:
                         write_human_queue(results[i], escalated_output_path)
-                        write_human_review_file(results[i], escalated_output_path.with_name(
-                            f"{escalated_output_path.stem}_for_human_labeling{escalated_output_path.suffix}"
-                        ))
                 completed += 1
                 elapsed = time.monotonic() - start
                 rate = completed / elapsed * 60 if elapsed > 0 else 0
                 done_total = total_done + completed
                 agree = sum(1 for r in results if r and r.reached_agreement)
                 human = sum(1 for r in results if r and r.needs_human)
+                adjud = sum(1 for r in results if r and not r.reached_agreement and not r.needs_human)
                 sys.stderr.write(
                     f"[INFO] {done_total} done | batch {completed}/{len(texts)} "
-                    f"| errors={errors} | agree={agree} | human_escal={human} "
+                    f"| errors={errors} | agree={agree} | adjud={adjud} | human_escal={human} "
                     f"| {rate:.1f}/min\n"
                 )
                 sys.stderr.flush()
@@ -264,6 +233,8 @@ async def main():
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--concurrency", type=int, default=1)
     parser.add_argument("--limit", type=int, default=0, help="Limit rows (0 = all)")
+    parser.add_argument("--retry-escalated", action="store_true", help="Only retry cases that are in the escalated file")
+    parser.add_argument("--only-ids", type=str, default="", help="Comma separated list of ids to process")
     args = parser.parse_args()
 
     config = get_config(str(args.config))
@@ -289,13 +260,22 @@ async def main():
     escalated_output_path = Path(config.dream.escalation.export_file)
 
     done_ids = load_done_ids(args.output)
-    human_done_file = escalated_output_path.with_name(
-        f"{escalated_output_path.stem}_for_human_labeling{escalated_output_path.suffix}"
-    )
+    human_done_file = escalated_output_path
     done_human_ids = load_human_done_ids(human_done_file)
     prune_human_review_file(human_done_file, done_human_ids)
     done_ids |= done_human_ids
-    pending = [(t, i) for t, i in zip(texts, ids) if i not in done_ids]
+
+    escalated_ids = set()
+    if getattr(args, "only_ids", ""):
+        target_ids = set(args.only_ids.split(","))
+        pending = [(t, i) for t, i in zip(texts, ids) if i in target_ids]
+    elif getattr(args, "retry_escalated", False) and escalated_output_path.exists():
+        with open(escalated_output_path, encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                escalated_ids.add(str(row.get("task_id", "")).strip())
+        pending = [(t, i) for t, i in zip(texts, ids) if i in escalated_ids]
+    else:
+        pending = [(t, i) for t, i in zip(texts, ids) if i not in done_ids]
     total_done = len(done_ids)
     sys.stderr.write(f"[INFO] Input: {len(texts)} | Pending: {len(pending)} | Done: {total_done}\n")
     sys.stderr.flush()

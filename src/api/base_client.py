@@ -37,8 +37,7 @@ class BaseLLMClient:
                 is_last = attempt >= retries
 
                 if "length" in err_str or "maximum context" in err_str:
-                    # Don't retry on context length errors immediately, let subclass handle or raise
-                    raise
+                    pass # Allow nim_client's reduced max_tokens to be retried
 
                 if is_last:
                     break

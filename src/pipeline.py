@@ -195,19 +195,7 @@ async def annotate(
 
     except Exception as e:
         logger.error(f"[DREAM] Error task={task_id}: {e}")
-        return _make_result(
-            text=text,
-            task_id=task_id,
-            final_label="0",
-            confidence=0.0,
-            reasoning=f"Error: {str(e)}",
-            reached_agreement=False,
-            agreement_round=None,
-            rounds=[],
-            moderator=None,
-            adjudication=None,
-            needs_human=True,
-        )
+        raise e
 
 
 # Alias
