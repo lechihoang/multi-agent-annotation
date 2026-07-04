@@ -2,7 +2,7 @@ nvidia:
   model: qwen/qwen3-next-80b-a3b-instruct
   base_url: https://integrate.api.nvidia.com/v1
   max_tokens: 2048
-  max_retries: 5
+  max_retries: 8
   rate_limit: 40
 task:
   name: victsd_constructiveness
