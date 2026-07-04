@@ -1,10 +1,7 @@
 nvidia:
   model: qwen/qwen3-next-80b-a3b-instruct
   base_url: https://integrate.api.nvidia.com/v1
-  temperature: 0.0
-  top_p: 0.7
   max_tokens: 2048
-  stream: false
   max_retries: 5
   rate_limit: 40
 task:
@@ -12,51 +9,76 @@ task:
   text_column: Comment
   label_column: Constructiveness
   labels:
-    '0': Non-constructive — Little information, only simple emotions, no meaningful
-      contribution.
-    '1': Constructive — Reinforces point of view, provides information and particularized
-      opinions, promotes the topic.
+    '0': Non-constructive — Simple emotions, well-wishes, or generic reactions without
+      specific information or opinion
+    '1': Constructive — Provides specific viewpoint, information, analysis, or meaningful
+      contribution to the topic
 dream:
-  enabled: true
   debate:
     max_rounds: 2
-    temperature: 0.0
-  guidelines: "<guidelines>\nTASK: Classify Vietnamese social media comments as Constructive\
-    \ (1) or Non-constructive (0).\n\nLabel 1 — Constructive:\n- Comments that reinforce\
-    \ the writer's point of view\n- Provide specific information and particularized\
-    \ opinions\n- Contribute to promoting the topic\n- Often longer, detailed explanations\n\
-    \nLabel 0 — Non-constructive:\n- Little to no useful information\n- Only express\
-    \ simple emotions (e.g., \"I hope you get well\", \"Nice!\")\n- No meaningful\
-    \ contribution to the discussion\n\nEXAMPLES FROM PAPER:\n\nLabel 1 (Constructive):\n\
-    - \"Nội dung bài viết là câu trả lời đơn giản cho câu hỏi... cả thế giới đều thế\
-    \ thì khó mà mong đến việc giữ vững tốc độ tăng trưởng kinh tế!\"\n  (Long explanatory\
-    \ comment with specific information and opinion)\n\nLabel 0 (Non-constructive):\n\
-    - \"Cầu mong ông sớm khỏe mạnh\" (I hope you get well soon — simple emotion, no\
-    \ contribution)\n- \"70% cơ thể người là nước mà!\" (70% of human body is water\
-    \ — random fact, no contribution)\n\nIMPORTANT:\n- Do NOT confuse length with\
-    \ constructiveness. A short comment can be constructive if it provides a specific\
-    \ opinion.\n- Simple well-wishes = Label 0 (no contribution)\n- Questions seeking\
-    \ clarification can be Label 1 if they add context\n- Comments with specific data/facts/examples\
-    \ = likely Label 1\n- You must quote brief, decisive evidence from the comment\
-    \ text.\n- Keep reasoning concise and focused only on the label criteria.\n</guidelines>\n"
-  agent_a_system: 'You are Agent_A — a Vietnamese language expert specializing in
-    constructive speech detection.
+  guidelines: '<guidelines>
+
+    TASK: Classify Vietnamese social media comments as Constructive (1) or Non-constructive
+    (0) based on the ViCTSD dataset guidelines.
+
+
+    Label 1 (Constructive):
+
+    - The comment provides lots of information and particularized opinions.
+
+    - It contributes to promoting the topic and reinforces a specific point of view.
+
+    - Constructive comments are typically longer and detailed, offering substance
+    beyond mere reaction.
+
+
+    Label 0 (Non-constructive):
+
+    - The comment has little information.
+
+    - It is only about expressing simple emotions (e.g., pure praise, anger, sympathy)
+    and does not have much analytical meaning.
+
+    - Vague reactions, short exclamations, or generic well-wishes fall here.
+
+
+    CRITICAL RULES:
+
+    1. Ask: "Does this comment provide specific information/opinions that promote
+    the topic?"
+
+    2. If it is just an emotional exclamation (even using specific nouns) with little
+    informational value, it is 0.
+
+    3. Quote the DECISIVE phrase showing the presence or lack of information.
+
+    4. Keep reasoning concise (max ~90 words).
+
+    </guidelines>
+
+    '
+  agent_a_system: 'You are a Vietnamese language expert specializing in constructive
+    speech detection.
 
     Your task: classify social media comments as Constructive (1) or Non-constructive
     (0).
 
-    You may agree or disagree with Label 1 based on your analysis.
+    You will critically analyze the text, leaning towards identifying Constructive
+    (1) elements if present.
+
 
     {guidelines}
 
     '
-  agent_b_system: 'You are Agent_B — a Vietnamese language expert specializing in
-    constructive speech detection.
+  agent_b_system: 'You are a Vietnamese language expert specializing in constructive
+    speech detection.
 
     Your task: classify social media comments as Constructive (1) or Non-constructive
     (0).
 
-    You may agree or disagree with Label 0 based on your analysis.
+    You will critically analyze the text, leaning towards identifying Non-constructive
+    (0) elements if present.
+
 
     {guidelines}
 
@@ -107,11 +129,17 @@ dream:
     {history}
 
 
-    Read the debate history carefully.
+    Read the debate history carefully and critically evaluate the opposing agent''s
+    arguments.
 
-    - Rebut or acknowledge the opposing agent''s arguments.
+    - Rebut flaws in their reasoning or acknowledge if they provide a genuinely better
+    reasoning path.
+
+    - DO NOT just agree to reach a consensus. Only revise your label if the opposing
+    evidence is undeniably stronger.
 
     - Update or defend your position based on the evidence.
+
 
     Quote specific evidence from the comment to support your reasoning.
 
@@ -123,12 +151,14 @@ dream:
     '
   moderator:
     enabled: true
-    system: 'You are a moderator reviewing a debate about Vietnamese social media
-      comment classification.
+    system: 'You are a decisive moderator reviewing a debate about Vietnamese social
+      media comment classification.
 
-      Identify the main points of disagreement between Agent_A and Agent_B.
+      Your task is to identify the main points of disagreement between the two debating
+      agents.
 
-      Summarize: (1) what they agree on, (2) what they disagree on.
+      Do not absorb their biases. Objectively summarize: (1) what they agree on, (2)
+      the core logical conflict in their disagreement.
 
       '
     user_template: 'Comment: {text}
@@ -145,9 +175,13 @@ dream:
   adjudicator:
     temperature: 0.0
     max_tokens: 1024
-    system: 'You are the Adjudicator — a neutral expert making the final decision.
+    system: 'You are the Adjudicator — a neutral, decisive expert making the final
+      decision.
 
-      Evaluate the debate history and comment objectively.
+      Evaluate the debate history and the comment objectively. Do not flip-flop.
+
+      Rely heavily on the Core Principles and Critical Rules in the guidelines.
+
 
       {guidelines}
 
@@ -177,7 +211,7 @@ dream:
 
       '
   escalation:
-    mode: paper_strict_human
+    mode: fully_automatic
     export_file: data/victsd_escalated.csv
   llm:
     temperature: 0.0

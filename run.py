@@ -21,7 +21,6 @@ load_dotenv()
 
 from src.config import get_config
 from src.pipeline import annotate, DreamResult
-from src.logging_setup import setup_logging
 
 DATA_DIR = Path("data")
 
@@ -34,7 +33,13 @@ def load_done_ids(output_path: Path) -> set[str]:
         for row in csv.DictReader(f):
             tid = row.get("task_id", "").strip()
             final_label = str(row.get("final_label", "")).strip()
+            reasoning = str(row.get("reasoning", "")).strip()
             needs_human = str(row.get("needs_human", "")).strip().lower() == "true"
+            
+            # If it's an error, don't mark as done, so we can retry
+            if "Error:" in reasoning:
+                continue
+                
             if tid and (final_label != "" or needs_human):
                 done.add(tid)
     sys.stderr.write(f"[INFO] Resume: {len(done)} already done in {output_path}\n")
@@ -149,8 +154,8 @@ def write_result(result: DreamResult, path: Path):
             "reasoning": result.reasoning,
             "reached_agreement": result.reached_agreement,
             "agreement_round": result.agreement_round or "",
-            "used_moderator": result.used_moderator,
-            "used_adjudicator": result.used_adjudicator,
+            "used_moderator": mod is not None,
+            "used_adjudicator": adj is not None,
             "needs_human": result.needs_human,
             "moderator_agreements": mod.agreements if mod else "",
             "moderator_disagreements": mod.disagreements if mod else "",
@@ -262,7 +267,9 @@ async def main():
     args = parser.parse_args()
 
     config = get_config(str(args.config))
-    setup_logging(config.logging_level)
+    # Set logging level
+    numeric_level = getattr(logging, config.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
     logger = logging.getLogger(__name__)
 
     sys.stderr.write(f"[INFO] Config: {config.task.name} | model: {config.nvidia.model}\n")

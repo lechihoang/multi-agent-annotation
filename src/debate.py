@@ -57,7 +57,6 @@ def _format_history(rounds: List[DebateRound]) -> str:
 def _build_agent_user_prompt(
     config,
     text: str,
-    agent: str,
     stance_label: str,
     history: List[DebateRound],
 ) -> str:
@@ -97,7 +96,7 @@ async def run_agent_turn(
     llm = get_nim_client()
 
     system_prompt = _build_agent_system(config, agent)
-    user_prompt = _build_agent_user_prompt(config, text, agent, stance_label, history)
+    user_prompt = _build_agent_user_prompt(config, text, stance_label, history)
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -268,33 +267,33 @@ async def run_adjudicator(
 def calibrate_confidence(
     reached_agreement: bool,
     agreement_round: int | None,
-    rounds: List[DebateRound],
     adjudication: AdjudicationResult | None,
 ) -> float:
     """
-    Calibrate confidence based on debate dynamics.
-    Not hardcoded — reflects actual debate quality.
+    Confidence score derived purely from debate structure per the DREAM paper.
+
+    Key principle (paper §3.1):
+      "our approach leverages inter-agent agreement as a direct indicator of
+       reliability … avoiding calibration training or threshold tuning."
+
+    Signal source is observable debate *behavior*, not self-assessed content:
+      - Round 1 agreement  → 0.95  (immediate consensus, strongest signal)
+      - Round 2 agreement  → 0.85  (survived one round of challenge)
+      - Round R≥3          → decreasing by 0.05 per extra round
+      - Adjudicator path   → adjudicator's own stated confidence (already a
+                             structured LLM output, not heuristic)
+      - No agreement       → 0.0   (genuinely uncertain → escalate to human)
     """
     if reached_agreement and agreement_round is not None:
-        # Base confidence on which round agreement was reached
-        base = 0.80 if agreement_round == 1 else 0.90
+        # Agreement speed is the only structural signal the paper defines.
+        # Paper default max rounds = 2; handle R≥3 gracefully.
+        base = 0.95 - (agreement_round - 1) * 0.10   # R1→0.95, R2→0.85, R3→0.75 …
+        return round(max(base, 0.60), 3)
 
-        # Check argument quality: longer arguments = more thorough reasoning
-        if rounds:
-            last = rounds[-1]
-            avg_len = (
-                len(last.agent_a_turn.argument)
-                + len(last.agent_b_turn.argument)
-            ) / 2
-            if avg_len > 300:
-                base = min(base + 0.08, 0.95)
-            elif avg_len < 80:
-                base = max(base - 0.05, 0.70)
+    if adjudication is not None:
+        # Adjudicator explicitly outputs its confidence as part of its
+        # structured response — use it directly, no secondary heuristic.
+        return round(float(adjudication.confidence), 3)
 
-        return round(base, 3)
-
-    elif adjudication is not None:
-        # Use adjudicator's confidence directly
-        return round(adjudication.confidence, 3)
-
-    return 0.5
+    # No agreement, no adjudicator → maximum uncertainty
+    return 0.0

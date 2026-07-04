@@ -1,11 +1,8 @@
 """
 Base LLM client primitives inspired by ReEvo style:
 - centralized retry loop
-- categorized transient errors
 - exponential backoff with jitter
 """
-
-from __future__ import annotations
 
 import asyncio
 import logging
@@ -24,39 +21,23 @@ class BaseLLMClient:
         self.max_retries = max_retries
         self.base_backoff_s = base_backoff_s
 
-    @staticmethod
-    def _is_transient_error(err_str: str) -> bool:
-        return any(
-            token in err_str
-            for token in (
-                "429",
-                "rate limit",
-                "too many requests",
-                "502",
-                "bad gateway",
-                "503",
-                "service unavailable",
-                "504",
-                "gateway timeout",
-                "timeout",
-                "temporarily unavailable",
-                "connection",
-            )
-        )
-
     async def _retry(self, fn: Callable[[], Awaitable[T]], max_retries: int | None = None) -> T:
         last_error: Exception | None = None
         retries = self.max_retries if max_retries is None else max_retries
+        
+        # Initial jitter (Reevo style)
+        await asyncio.sleep(random())
+        
         for attempt in range(retries + 1):
             try:
                 return await fn()
             except Exception as e:  # noqa: BLE001
                 last_error = e
-                err = str(e).lower()
-                transient = self._is_transient_error(err)
+                err_str = str(e).lower()
                 is_last = attempt >= retries
 
-                if not transient and "length" not in err and "maximum context" not in err:
+                if "length" in err_str or "maximum context" in err_str:
+                    # Don't retry on context length errors immediately, let subclass handle or raise
                     raise
 
                 if is_last:
@@ -64,12 +45,7 @@ class BaseLLMClient:
 
                 wait_s = self.base_backoff_s * (2**attempt) + random() * 0.25
                 logger.warning(
-                    "LLM call failed (attempt=%s/%s, transient=%s): %s; retry in %.2fs",
-                    attempt + 1,
-                    retries + 1,
-                    transient,
-                    e,
-                    wait_s,
+                    f"LLM call failed (attempt={attempt + 1}/{retries + 1}): {e}; retry in {wait_s:.2f}s"
                 )
                 await asyncio.sleep(wait_s)
 

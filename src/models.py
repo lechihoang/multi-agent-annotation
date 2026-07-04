@@ -10,13 +10,10 @@ from pydantic import BaseModel, Field
 class DebateTurn(BaseModel):
     """Single turn from one agent."""
 
-    agent: Optional[str] = Field(
-        default=None,
-        description="Agent name: Agent_A or Agent_B (may be omitted in output)",
-    )
-    label: str = Field(description="Label decision: 0 or 1", pattern=r"^[01]$")
+    label: str = Field(description="Label decision: 0 or 1")
     evidence: str = Field(description="Quoted evidence from the text")
     argument: str = Field(description="Reasoning/argument in Vietnamese or English")
+
 
 
 class DebateRound(BaseModel):
@@ -57,7 +54,6 @@ class DreamResult(BaseModel):
 
     task_id: str = Field(description="Unique task identifier")
     text: str = Field(description="Original input text")
-    old_label: Optional[str] = Field(default=None, description="Original label (for relabeling)")
     final_label: str = Field(description="Final label: 0 or 1", pattern=r"^[01]$")
 
     # Confidence — dynamically calibrated
@@ -75,11 +71,9 @@ class DreamResult(BaseModel):
     )
 
     # Moderator (if used)
-    used_moderator: bool = Field(default=False)
     moderator_summary: Optional[ModeratorSummary] = Field(default=None)
 
     # Adjudicator (if agents disagreed)
-    used_adjudicator: bool = Field(default=False)
     adjudication: Optional[AdjudicationResult] = Field(default=None)
 
     # Escalation

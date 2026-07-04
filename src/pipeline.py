@@ -55,9 +55,7 @@ def _make_result(
         reached_agreement=reached_agreement,
         agreement_round=agreement_round,
         debate_rounds=rounds,
-        used_moderator=moderator is not None,
         moderator_summary=moderator,
-        used_adjudicator=adjudication is not None,
         adjudication=adjudication,
         needs_human=needs_human,
         agent_a_final_argument=last.agent_a_turn.argument if last else "",
@@ -108,7 +106,6 @@ async def annotate(
                 confidence = calibrate_confidence(
                     reached_agreement=True,
                     agreement_round=round_num,
-                    rounds=rounds,
                     adjudication=None,
                 )
                 reasoning = (
@@ -172,7 +169,6 @@ async def annotate(
         confidence = calibrate_confidence(
             reached_agreement=False,
             agreement_round=None,
-            rounds=rounds,
             adjudication=adjudication,
         )
 

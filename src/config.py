@@ -36,10 +36,7 @@ def _get(d: Dict, *keys, default=None):
 class NvidiaConfig:
     model: str = "meta/llama-3.3-70b-instruct"
     base_url: str = "https://integrate.api.nvidia.com/v1"
-    temperature: float = 0.0
-    top_p: float = 0.7
     max_tokens: int = 2048
-    stream: bool = False
     max_retries: int = 5
     rate_limit: int = 40
 
@@ -59,7 +56,6 @@ class TaskConfig:
             "1": "Label 1",
         }
     )
-    min_text_length: int = 10
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +65,6 @@ class TaskConfig:
 @dataclass
 class DebateConfig:
     max_rounds: int = 2
-    temperature: float = 0.0
 
 
 @dataclass
@@ -101,7 +96,6 @@ class DreamLLMConfig:
 
 @dataclass
 class DreamConfig:
-    enabled: bool = True
     guidelines: str = ""
     agent_a_system: str = ""
     agent_b_system: str = ""
@@ -142,10 +136,7 @@ def load_config(path: str = "config.yaml") -> Config:
         nvidia=NvidiaConfig(
             model=nv.get("model", "meta/llama-3.3-70b-instruct"),
             base_url=nv.get("base_url", "https://integrate.api.nvidia.com/v1"),
-            temperature=float(nv.get("temperature", 0.0)),
-            top_p=float(nv.get("top_p", 0.7)),
             max_tokens=int(nv.get("max_tokens", 2048)),
-            stream=bool(nv.get("stream", False)),
             max_retries=int(nv.get("max_retries", 5)),
             rate_limit=int(nv.get("rate_limit", 40)),
         ),
@@ -154,10 +145,8 @@ def load_config(path: str = "config.yaml") -> Config:
             text_column=task.get("text_column", "review"),
             label_column=task.get("label_column", "label"),
             labels=task.get("labels", {"0": "Label 0", "1": "Label 1"}),
-            min_text_length=int(task.get("min_text_length", 10)),
         ),
         dream=DreamConfig(
-            enabled=dream.get("enabled", True),
             guidelines=dream.get("guidelines", ""),
             agent_a_system=dream.get("agent_a_system", ""),
             agent_b_system=dream.get("agent_b_system", ""),
@@ -180,7 +169,6 @@ def load_config(path: str = "config.yaml") -> Config:
             ),
             debate=DebateConfig(
                 max_rounds=int(dream_debate.get("max_rounds", 2)),
-                temperature=float(dream_debate.get("temperature", 0.0)),
             ),
             llm=DreamLLMConfig(
                 temperature=float(llm.get("temperature", 0.0)),
