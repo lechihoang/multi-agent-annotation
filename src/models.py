@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class DebateTurn(BaseModel):
     """Single turn from one agent."""
 
-    label: str = Field(description="Label decision: 0 or 1")
+    label: str = Field(description="Label decision: 0 or 1", pattern=r"^[01]$")
     evidence: str = Field(description="Quoted evidence from the text")
     argument: str = Field(description="Reasoning/argument in Vietnamese or English")
 
